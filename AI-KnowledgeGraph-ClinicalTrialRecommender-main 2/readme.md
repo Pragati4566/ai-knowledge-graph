@@ -5,9 +5,6 @@
     <strong>Indira Gandhi Delhi Technical University for Women (IGDTUW), New Delhi</strong><br>
     Academic Session 2026–2027 | Batch 2023–2027
   </p>
-  <p>
-    <a href="report.pdf">View Minor Project Report</a>
-  </p>
 </div>
 
 ## Project Team
@@ -162,14 +159,12 @@ This system is intended as a **research-discovery aid** to help explore earlier 
 
 ## Credits and References
 
-The implementation base and associated project materials are credited to the original owners of the [`AI-KnowledgeGraph-ClinicalTrialRecommender` repository](https://github.com/ranjeetkulkarni/AI-KnowledgeGraph-ClinicalTrialRecommender), which originated as a NEST 2025 hackathon project and was used with permission for this academic submission.
+The implementation base and associated project materials are credited to the original owners of the upstream repository linked in the Project Provenance section above. It originated as a NEST 2025 hackathon project and was used with permission for this academic submission.
 
 The IGDTUW minor-project report documents the repository's architecture and recorded behaviour, analyses the available Jaccard and cosine results, checks the interpretation of those results, and records implementation limits and future research directions. Technologies, datasets, papers, and other resources used in the work should be acknowledged in the report's reference list and in accordance with their respective licences and terms.
 
 ## Additional Resources
 
-- **Minor Project Report:** [`report.pdf`](report.pdf) — place the final IGDTUW report PDF in the repository root using this filename, or update the link above to its actual location.
-- **Upstream project repository:** [AI-KnowledgeGraph-ClinicalTrialRecommender](https://github.com/ranjeetkulkarni/AI-KnowledgeGraph-ClinicalTrialRecommender).
 - **Evaluation script:** `metric_evaluation.py`.
 - **Graph viewer files:** `index.html`, `nodes.json`, and `edges.json`.
 
