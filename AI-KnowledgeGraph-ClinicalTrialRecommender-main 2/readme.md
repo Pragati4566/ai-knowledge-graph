@@ -18,8 +18,6 @@
 **Department:** Electronics and Communication Engineering with Artificial Intelligence  
 **Institution:** Indira Gandhi Delhi Technical University for Women (IGDTUW), New Delhi
 
-> **Project provenance:** This academic project is based on the publicly available [`AI-KnowledgeGraph-ClinicalTrialRecommender`](https://github.com/ranjeetkulkarni/AI-KnowledgeGraph-ClinicalTrialRecommender) repository, used with permission from its original project owners. The upstream repository originates from a NEST 2025 hackathon project. The original project and its contributors are credited as the source of the code base. This README does not claim that the underlying code was independently authored from scratch by the IGDTUW team. Our report documents the system, studies its implementation, analyses its recorded outputs, and discusses its limitations.
-
 ## Project Overview
 
 Clinical-trial records contain useful information about study objectives, interventions, outcome measures, and participant eligibility. Much of this information is written as free text, which can make it difficult to identify earlier trials that are conceptually similar to a given study.
