@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Clinical Trials Knowledge Graph</title>
+
+  <!-- vis-network -->
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* --- compacted & production-ready styling (keeps original look) --- */
+    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    :root{
+      --primary:#6366f1;--primary-2:#8b5cf6;--bg:#fff;--card:#fff;--muted:#64748b;--text:#1e293b;
+      --card-dark:#0f1724;--bg-dark:#071026;--muted-dark:#94a3b8;--text-dark:#f8fafc;--border:#e6eef9;
+      --trials:#6366f1;--conditions:#ec4899;--treatments:#10b981;--measures:#f59e0b;
+      --shadow: 0 6px 22px rgba(16,24,40,0.06);
+    }
+    body{height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--text);transition:.2s}
+    body.dark{background:var(--bg-dark);color:var(--text-dark)}
+    header{height:70px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--card),#f3f4f6)}
+    body.dark header{background:linear-gradient(135deg,var(--card-dark),#111827);border-color:#263243}
+    .logo{display:flex;align-items:center;gap:12px;font-weight:700}
+    .logo-icon{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--primary-2));display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(99,102,241,0.2)}
+    .logo-icon:before{content:"";width:18px;height:18px;background:#fff;border-radius:50%}
+    .search-container{max-width:520px;flex:1;margin:0 20px;position:relative}
+    .search-input{width:100%;padding:10px 40px;border-radius:10px;border:2px solid var(--border);background:transparent}
+    .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:18px;height:18px;opacity:.6}
+    .search-clear{position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;opacity:0.6;display:none}
+    .header-actions{display:flex;gap:10px;align-items:center}
+    .btn{border-radius:10px;padding:8px 12px;border:none;background:transparent;cursor:pointer}
+    .btn-primary{background:linear-gradient(90deg,var(--primary),var(--primary-2));color:#fff}
+    .main-container{display:flex;flex:1;overflow:hidden}
+    .sidebar{width:280px;border-right:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;transition:width .25s}
+    body.dark .sidebar{background:var(--card-dark);border-color:#263243}
+    .sidebar.collapsed{width:80px}
+    .sidebar-header{padding:16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+    .sidebar-content{padding:16px;overflow:auto;flex:1}
+    .sidebar-section{margin-bottom:18px}
+    .sidebar-section-title{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+    .slider-container{margin-bottom:12px}
+    .slider-header{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;color:var(--muted)}
+    .slider{width:100%}
+    .color-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .color-item{height:44px;border-radius:10px;cursor:pointer;box-shadow:inset 0 -6px rgba(0,0,0,0.04)}
+    .graph-container{flex:1;padding:16px;display:flex;flex-direction:column}
+    .graph-header{padding:12px 16px;border-radius:12px;margin-bottom:12px;background:linear-gradient(135deg,#fff,#f8fafc);border:1px solid var(--border)}
+    .graph-title{font-size:18px;font-weight:700}
+    .graph-visualization{position:relative;flex:1;border-radius:14px;background:var(--card);box-shadow:var(--shadow);overflow:hidden}
+    #network-container{position:absolute;inset:0}
+    .graph-controls{position:absolute;right:16px;top:16px;display:flex;flex-direction:column;gap:8px;z-index:10}
+    .control-btn{border-radius:10px;padding:8px;border:1px solid var(--border);background:var(--card);cursor:pointer}
+    .graph-legend{position:absolute;right:16px;bottom:16px;background:var(--card);padding:10px;border-radius:10px;box-shadow:var(--shadow);display:flex;gap:12px;border:1px solid var(--border)}
+    .legend-color{width:12px;height:12px;border-radius:6px}
+    .loading-overlay{position:absolute;inset:0;background:rgba(255,255,255,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20}
+    body.dark .loading-overlay{background:rgba(6,10,18,0.9)}
+    .spinner{width:56px;height:56px;border:5px solid rgba(99,102,241,0.12);border-left-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:10px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .node-details{position:absolute;left:16px;bottom:16px;width:310px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;box-shadow:var(--shadow);z-index:12;display:none}
+    .badge{display:inline-block;padding:6px 8px;border-radius:999px;background:#f3f4f6;font-size:12px;margin-right:6px}
+    /* responsive */
+    @media (max-width:900px){.sidebar{display:none}.search-container{display:none}}
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="logo">
+        <div class="logo-icon" aria-hidden></div>
+        <div>Clinical Trials KG</div>
+      </div>
+    </div>
+
+    <div class="search-container" style="max-width:700px">
+      <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="search-input" class="search-input" placeholder="Search nodes, labels, groups, NCT IDs..." />
+      <button id="clear-search" class="search-clear" title="Clear search" aria-label="Clear search" style="display:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="header-actions">
+      <button id="theme-toggle" class="btn tooltip" title="Toggle theme">
+        <svg id="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button id="export-btn" class="btn btn-primary">Export</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <div class="main-container">
+    <aside id="sidebar" class="sidebar" aria-hidden="false">
+  <div class="sidebar-header">
+    <div class="sidebar-title">Graph Controls</div>
+    <button id="sidebar-toggle" class="btn">«</button>
+  </div>
+
+  <div class="sidebar-content">
+
+    <!-- PHYSICS -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Physics</div>
+
+      <div class="slider-container">
+        <div class="slider-header">
+          <div>Gravity</div>
+          <div id="gravity-value">50%</div>
+        </div>
+        <input id="gravity-slider" class="slider" type="range" min="0" max="100" value="50">
+      </div>
+
+      <div class="slider-container">
+        <div class="slider-header">
+          <div>Node spacing</div>
+          <div id="spacing-value">70%</div>
+        </div>
+        <input id="spacing-slider" class="slider" type="range" min="0" max="100" value="70">
+      </div>
+    </div>
+
+    <!-- APPEARANCE -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Appearance</div>
+      <div class="color-grid">
+        <div class="color-item" style="background:#6366f1"></div> <!-- Trials -->
+        <div class="color-item" style="background:#ec4899"></div> <!-- Conditions -->
+        <div class="color-item" style="background:#10b981"></div> <!-- Treatments -->
+        <div class="color-item" style="background:#f59e0b"></div> <!-- Measures -->
+        <div class="color-item" style="background:#8b5cf6"></div> <!-- Populations -->
+        <div class="color-item" style="background:#64748b"></div> <!-- Default -->
+      </div>
+    </div>
+
+    <!-- DATA -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Data</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="data-source-btn" class="btn btn-outline">Data Source</button>
+        <button id="save-graph-btn" class="btn btn-outline">Save</button>
+      </div>
+    </div>
+
+    <!-- DIVIDER -->
+    <div style="height:1px;background:var(--border);margin:14px 0"></div>
+
+    <!-- ABOUT -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">About</div>
+      <div style="font-size:13px;line-height:1.45;color:var(--muted)">
+        This interactive knowledge graph visualizes structured relationships between clinical trials, conditions, treatments, populations, and outcome measures.
+It enables explainable trial discovery, comparison, and relationship-driven exploration for research and decision support.
+      </div>
+    </div>
+
+  </div>
+</aside>
+
+
+    <main class="graph-container">
+      <div class="graph-header">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="graph-title">Knowledge Graph Visualization  <a href="https://github.com/ranjeetkulkarni/AI-KnowledgeGraph-ClinicalTrialRecommender"
+     target="_blank"
+     style="font-size:12px;color:var(--primary);text-decoration:none;font-weight:500">
+    View Project on GitHub →
+  </a>
+</div>
+            <div style="font-size:13px;color:var(--muted)">Explore relationships between clinical trials, conditions, and treatments. Search nodes and zoom in to reveal relationship types.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="graph-visualization">
+        <div id="loading-overlay" class="loading-overlay">
+          <div class="spinner"></div>
+          <div style="font-weight:600;margin-bottom:8px">Loading graph</div>
+          <div style="width:260px;height:8px;background:#eef2ff;border-radius:6px;overflow:hidden;margin-bottom:6px">
+            <div id="progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--primary),var(--primary-2))"></div>
+          </div>
+          <div id="progress-text" style="color:var(--muted)">Initializing...</div>
+        </div>
+
+        <div class="graph-controls">
+          <button id="zoom-in" class="control-btn" title="Zoom in">+</button>
+          <button id="zoom-out" class="control-btn" title="Zoom out">−</button>
+          <button id="fit-graph" class="control-btn" title="Fit graph">Fit</button>
+          <button id="reset-physics" class="control-btn" title="Reset physics">Reset</button>
+        </div>
+
+        <div class="graph-legend" aria-hidden>
+          <div style="display:flex;gap:8px;align-items:center"><div class="legend-color" style="background:var(--trials)"></div><div style="font-size:13px">Trials</div></div>
+          <div style="display:flex;gap:8px;align-items:center"><div class="legend-color" style="background:var(--conditions)"></div><div style="font-size:13px">Conditions</div></div>
+          <div style="display:flex;gap:8px;align-items:center"><div class="legend-color" style="background:var(--treatments)"></div><div style="font-size:13px">Treatments</div></div>
+        </div>
+
+        <div id="network-container"></div>
+
+        <div id="node-details" class="node-details" aria-hidden>
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+            <div style="font-weight:700" id="node-title">Node</div>
+            <div class="badge" id="node-type">Type</div>
+          </div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:8px">ID</div>
+          <div id="node-id" style="margin-bottom:10px;font-weight:600">—</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Connections</div>
+          <div id="node-connections">—</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // ---- DOM references ----
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebar = document.getElementById('sidebar');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const searchInput = document.getElementById('search-input');
+    const clearSearchBtn = document.getElementById('clear-search');
+    const gravitySlider = document.getElementById('gravity-slider');
+    const spacingSlider = document.getElementById('spacing-slider');
+    const gravityValueEl = document.getElementById('gravity-value');
+    const spacingValueEl = document.getElementById('spacing-value');
+    const zoomInBtn = document.getElementById('zoom-in');
+    const zoomOutBtn = document.getElementById('zoom-out');
+    const fitGraphBtn = document.getElementById('fit-graph');
+    const resetPhysicsBtn = document.getElementById('reset-physics');
+    const nodeDetails = document.getElementById('node-details');
+    const nodeTitleEl = document.getElementById('node-title');
+    const nodeTypeEl = document.getElementById('node-type');
+    const nodeIdEl = document.getElementById('node-id');
+    const nodeConnectionsEl = document.getElementById('node-connections');
+
+    // ---- Network state ----
+    let network = null;
+    const nodes = new vis.DataSet([]);
+    const edges = new vis.DataSet([]);
+    // Store original colors for reset
+    const originalNodeColors = new Map();
+    const originalEdgeColors = new Map();
+
+    // ---- Example sample data (keeps file self-contained) ----
+    const sampleNodes = [
+    [
+  {"id": "NCT03821493", "label": "NCT03821493", "shape": "dot", "title": "SubjectNode: NCT03821493"},
+  {"id": "Advanced Solid Malignancies", "label": "Advanced Solid Malignancies", "shape": "dot", "title": "ObjectNode: Advanced Solid Malignancies"},
+  {"id": "Hepatitis B e Antigen Seroconversion", "label": "Hepatitis B e Antigen Seroconversion", "shape": "dot", "title": "ObjectNode: Hepatitis B e Antigen Seroconversion"},
+  {"id": "hypersensitivity itraconazole", "label": "hypersensitivity itraconazole", "shape": "dot", "title": "ObjectNode: hypersensitivity itraconazole"},
+  {"id": "diagnosed chronic heart failure", "label": "diagnosed chronic heart failure", "shape": "dot", "title": "ObjectNode: diagnosed chronic heart failure"},
+  {"id": "Body weight ≥ 45 kg", "label": "Body weight ≥ 45 kg", "shape": "dot", "title": "ObjectNode: Body weight ≥ 45 kg"},
+  {"id": "BMI 18 to 32 kg/m2", "label": "BMI 18 to 32 kg/m2", "shape": "dot", "title": "ObjectNode: BMI 18 to 32 kg/m2"},
+  {"id": "Maximum Observed Plasma Analyte Concentration", "label": "Maximum Observed Plasma Analyte Concentration", "shape": "dot", "title": "ObjectNode: Maximum Observed Plasma Analyte Concentration"},
+  {"id": "AUCinf of PF-06835919", "label": "AUCinf of PF-06835919", "shape": "dot", "title": "ObjectNode: AUCinf of PF-06835919"},
+  {"id": "Isavuconazole", "label": "Isavuconazole", "shape": "dot", "title": "ObjectNode: Isavuconazole"},
+  {"id": "Healthy Fed Participants", "label": "Healthy Fed Participants", "shape": "dot", "title": "ObjectNode: Healthy Fed Participants"},
+  {"id": "NCT04544293", "label": "NCT04544293", "shape": "dot", "title": "SubjectNode: NCT04544293"},
+  {"id": "Baseline to Week 49", "label": "Baseline to Week 49", "shape": "dot", "title": "ObjectNode: Baseline to Week 49"},
+  {"id": "Baseline to 28 days", "label": "Baseline to 28 days", "shape": "dot", "title": "ObjectNode: Baseline to 28 days"},
+  {"id": "SGRQ Activity component score", "label": "SGRQ Activity component score", "shape": "dot", "title": "ObjectNode: SGRQ Activity component score"},
+  {"id": "St. George's Hospital Respiratory Questionnaire", "label": "St. George's Hospital Respiratory Questionnaire", "shape": "dot", "title": "ObjectNode: St. George's Hospital Respiratory Questionnaire"},
+  {"id": "Change from baseline in Peak FEV1 response", "label": "Change from baseline in Peak FEV1 response", "shape": "dot", "title": "ObjectNode: Change from baseline in Peak FEV1 response"},
+  {"id": "Inhaled Molgramostim Nebulizer Solution", "label": "Inhaled Molgramostim Nebulizer Solution", "shape": "dot", "title": "ObjectNode: Inhaled Molgramostim Nebulizer Solution"},
+  {"id": "Idiopathic Pulmonary Fibrosis", "label": "Idiopathic Pulmonary Fibrosis", "shape": "dot", "title": "ObjectNode: Idiopathic Pulmonary Fibrosis"},
+  {"id": "NCT03181893", "label": "NCT03181893", "shape": "dot", "title": "SubjectNode: NCT03181893"},
+  {"id": "Treatment-Emergent SAEs", "label": "Treatment-Emergent SAEs", "shape": "dot", "title": "ObjectNode: Treatment-Emergent SAEs"},
+  {"id": "CDASI score change", "label": "CDASI score change", "shape": "dot", "title": "ObjectNode: CDASI score change"},
+  {"id": "Intravenous Sabirnetug", "label": "Intravenous Sabirnetug", "shape": "dot", "title": "ObjectNode: Intravenous Sabirnetug"},
+  {"id": "Cutaneous Dermatomyositis Disease Area and Severity Index Activity Score", "label": "Cutaneous Dermatomyositis Disease Area and Severity Index Activity Score", "shape": "dot", "title": "ObjectNode: Cutaneous Dermatomyositis Disease Area and Severity Index Activity Score"},
+  {"id": "NCT01328093", "label": "NCT01328093", "shape": "dot", "title": "SubjectNode: NCT01328093"},
+  {"id": "Baseline condition", "label": "Baseline condition", "shape": "dot", "title": "ObjectNode: Baseline condition"},
+  {"id": "Simpson Angus Rating Scale", "label": "Simpson Angus Rating Scale", "shape": "dot", "title": "ObjectNode: Simpson Angus Rating Scale"},
+  {"id": "Barnes Akathisia Rating Scale", "label": "Barnes Akathisia Rating Scale", "shape": "dot", "title": "ObjectNode: Barnes Akathisia Rating Scale"},
+  {"id": "Change in weight control", "label": "Change in weight control", "shape": "dot", "title": "ObjectNode: Change in weight control"},
+  {"id": "Iloperidone", "label": "Iloperidone", "shape": "dot", "title": "ObjectNode: Iloperidone"},
+  {"id": "LY2624803", "label": "LY2624803", "shape": "dot", "title": "ObjectNode: LY2624803"},
+  {"id": "Early-Episode Schizophrenia", "label": "Early-Episode Schizophrenia", "shape": "dot", "title": "ObjectNode: Early-Episode Schizophrenia"},
+  {"id": "NCT04732793", "label": "NCT04732793", "shape": "dot", "title": "SubjectNode: NCT04732793"},
+  {"id": "WOMAC A", "label": "WOMAC A", "shape": "dot", "title": "ObjectNode: WOMAC A"},
+  {"id": "baseline through 16 weeks", "label": "baseline through 16 weeks", "shape": "dot", "title": "ObjectNode: baseline through 16 weeks"},
+  {"id": "WOMAC B Stiffness", "label": "WOMAC B Stiffness", "shape": "dot", "title": "ObjectNode: WOMAC B Stiffness"},
+  {"id": "WOMAC A subscale", "label": "WOMAC A subscale", "shape": "dot", "title": "ObjectNode: WOMAC A subscale"},
+  {"id": "Hyruan ONE", "label": "Hyruan ONE", "shape": "dot", "title": "ObjectNode: Hyruan ONE"},
+  {"id": "Osteoarthritis-related Pain", "label": "Osteoarthritis-related Pain", "shape": "dot", "title": "ObjectNode: Osteoarthritis-related Pain"},
+  {"id": "NCT02240693", "label": "NCT02240693", "shape": "dot", "title": "SubjectNode: NCT02240693"},
+  {"id": "Change From Baseline-2", "label": "Change From Baseline-2", "shape": "dot", "title": "ObjectNode: Change From Baseline-2"},
+  {"id": "Early Symptomatic Alzheimer's Disease", "label": "Early Symptomatic Alzheimer's Disease", "shape": "dot", "title": "ObjectNode: Early Symptomatic Alzheimer's Disease"},
+  {"id": "BI 456906", "label": "BI 456906", "shape": "dot", "title": "ObjectNode: BI 456906"},
+  {"id": "self care and daily function", "label": "self care and daily function", "shape": "dot", "title": "ObjectNode: self care and daily function"},
+  {"id": "ADCS-ADL scale", "label": "ADCS-ADL scale", "shape": "dot", "title": "ObjectNode: ADCS-ADL scale"},
+  {"id": "NCT06456593", "label": "NCT06456593", "shape": "dot", "title": "SubjectNode: NCT06456593"},
+  {"id": "SES-CD ulcer subscore > 1", "label": "SES-CD ulcer subscore > 1", "shape": "dot", "title": "ObjectNode: SES-CD ulcer subscore > 1"},
+  {"id": "endoscopic treatment improvement", "label": "endoscopic treatment improvement", "shape": "dot", "title": "ObjectNode: endoscopic treatment improvement"},
+  {"id": "Clinically Significant Remission", "label": "Clinically Significant Remission", "shape": "dot", "title": "ObjectNode: Clinically Significant Remission"},
+  {"id": "CDAI-Defined Clinical Response", "label": "CDAI-Defined Clinical Response", "shape": "dot", "title": "ObjectNode: CDAI-Defined Clinical Response"},
+  {"id": "Weeks 12", "label": "Weeks 12", "shape": "dot", "title": "ObjectNode: Weeks 12"},
+  {"id": "Week 60", "label": "Week 60", "shape": "dot", "title": "ObjectNode: Week 60"},
+  {"id": "Obefazimod", "label": "Obefazimod", "shape": "dot", "title": "ObjectNode: Obefazimod"},
+  {"id": "PRO-2 Remission", "label": "PRO-2 Remission", "shape": "dot", "title": "ObjectNode: PRO-2 Remission"},
+  {"id": "Mayo IBD symptom severity score", "label": "Mayo IBD symptom severity score", "shape": "dot", "title": "ObjectNode: Mayo IBD symptom severity score"},
+  {"id": "Simple Endoscopic Score for Crohn's disease (SES-CD)", "label": "Simple Endoscopic Score for Crohn's disease (SES-CD)", "shape": "dot", "title": "ObjectNode: Simple Endoscopic Score for Crohn's disease (SES-CD)"},
+  {"id": "Immune-related Colitis", "label": "Immune-related Colitis", "shape": "dot", "title": "ObjectNode: Immune-related Colitis"},
+  {"id": "NCT05590793", "label": "NCT05590793", "shape": "dot", "title": "SubjectNode: NCT05590793"},
+  {"id": "Change in electrocardiograms", "label": "Change in electrocardiograms", "shape": "dot", "title": "ObjectNode: Change in electrocardiograms"},
+  {"id": "Serum Testosterone Levels", "label": "Serum Testosterone Levels", "shape": "dot", "title": "ObjectNode: Serum Testosterone Levels"},
+  {"id": "Triptorelin Pamoate PR 3-month", "label": "Triptorelin Pamoate PR 3-month", "shape": "dot", "title": "ObjectNode: Triptorelin Pamoate PR 3-month"},
+  {"id": "Chinese Adult Subjects", "label": "Chinese Adult Subjects", "shape": "dot", "title": "ObjectNode: Chinese Adult Subjects"},
+  {"id": "Advanced Prostate Cancer", "label": "Advanced Prostate Cancer", "shape": "dot", "title": "ObjectNode: Advanced Prostate Cancer"},
+  {"id": "physical examination results", "label": "physical examination results", "shape": "dot", "title": "ObjectNode: physical examination results"},
+  {"id": "Prostate-Specific Antigen Levels", "label": "Prostate-Specific Antigen Levels", "shape": "dot", "title": "ObjectNode: Prostate-Specific Antigen Levels"},
+  {"id": "Clinically significant abnormalities in vital signs", "label": "Clinically significant abnormalities in vital signs", "shape": "dot", "title": "ObjectNode: Clinically significant abnormalities in vital signs"},
+  {"id": "Screening laboratory parameters", "label": "Screening laboratory parameters", "shape": "dot", "title": "ObjectNode: Screening laboratory parameters"},
+  {"id": "NCT05732454", "label": "NCT05732454", "shape": "dot", "title": "SubjectNode: NCT05732454"},
+  {"id": "Overall platelet response", "label": "Overall platelet response", "shape": "dot", "title": "ObjectNode: Overall platelet response"},
+  {"id": "RBC", "label": "RBC", "shape": "dot", "title": "ObjectNode: RBC"},
+  {"id": "IGA cleared or minimal", "label": "IGA cleared or minimal", "shape": "dot", "title": "ObjectNode: IGA cleared or minimal"},
+  {"id": "Urea Nitrogen", "label": "Urea Nitrogen", "shape": "dot", "title": "ObjectNode: Urea Nitrogen"},
+  {"id": "oral medications", "label": "oral medications", "shape": "dot", "title": "ObjectNode: oral medications"},
+  {"id": "Mean Change Total Bilirubin", "label": "Mean Change Total Bilirubin", "shape": "dot", "title": "ObjectNode: Mean Change Total Bilirubin"},
+  {"id": "mean corpuscular hemoglobin", "label": "mean corpuscular hemoglobin", "shape": "dot", "title": "ObjectNode: mean corpuscular hemoglobin"},
+  {"id": "TBNK panel", "label": "TBNK panel", "shape": "dot", "title": "ObjectNode: TBNK panel"},
+  {"id": "WBC", "label": "WBC", "shape": "dot", "title": "ObjectNode: WBC"},
+  {"id": "Children with atopic dermatitis", "label": "Children with atopic dermatitis", "shape": "dot", "title": "ObjectNode: Children with atopic dermatitis"},
+  {"id": "Oral Etrasimod", "label": "Oral Etrasimod", "shape": "dot", "title": "ObjectNode: Oral Etrasimod"},
+  {"id": "Serum creatinine ≤3 mg/dL", "label": "Serum creatinine ≤3 mg/dL", "shape": "dot", "title": "ObjectNode: Serum creatinine ≤3 mg/dL"},
+  {"id": "Hematocrit change", "label": "Hematocrit change", "shape": "dot", "title": "ObjectNode: Hematocrit change"},
+  {"id": "NCT02220933", "label": "NCT02220933", "shape": "dot", "title": "SubjectNode: NCT02220933"},
+  {"id": "EDSS or TW25", "label": "EDSS or TW25", "shape": "dot", "title": "ObjectNode: EDSS or TW25"},
+  {"id": "Disease duration of secondary progressive multiple sclerosis", "label": "Disease duration of secondary progressive multiple sclerosis", "shape": "dot", "title": "ObjectNode: Disease duration of secondary progressive multiple sclerosis"},
+  {"id": "MSWS", "label": "MSWS", "shape": "dot", "title": "ObjectNode: MSWS"},
+  {"id": "MD1003", "label": "MD1003", "shape": "dot", "title": "ObjectNode: MD1003"},
+  {"id": "decreased EDSS", "label": "decreased EDSS", "shape": "dot", "title": "ObjectNode: decreased EDSS"},
+  {"id": "NCT03836287", "label": "NCT03836287", "shape": "dot", "title": "SubjectNode: NCT03836287"},
+  {"id": "Hyperhidrosis severity 3 or 4", "label": "Hyperhidrosis severity 3 or 4", "shape": "dot", "title": "ObjectNode: Hyperhidrosis severity 3 or 4"},
+  {"id": "Sofpironium Bromide Gel", "label": "Sofpironium Bromide Gel", "shape": "dot", "title": "ObjectNode: Sofpironium Bromide Gel"},
+  {"id": "Gravimetrically Measured Sweat Production", "label": "Gravimetrically Measured Sweat Production", "shape": "dot", "title": "ObjectNode: Gravimetrically Measured Sweat Production"},
+  {"id": "Primary Axillary Hyperhidrosis", "label": "Primary Axillary Hyperhidrosis", "shape": "dot", "title": "ObjectNode: Primary Axillary Hyperhidrosis"},
+  {"id": "Up to 32 weeks", "label": "Up to 32 weeks", "shape": "dot", "title": "ObjectNode: Up to 32 weeks"},
+  {"id": "NCT03068754", "label": "NCT03068754", "shape": "dot", "title": "SubjectNode: NCT03068754"},
+  {"id": "Clinically Significant Response", "label": "Clinically Significant Response", "shape": "dot", "title": "ObjectNode: Clinically Significant Response"},
+  {"id": "Lung function parameters", "label": "Lung function parameters", "shape": "dot", "title": "ObjectNode: Lung function parameters"},
+  {"id": "Acthar Gel", "label": "Acthar Gel", "shape": "dot", "title": "ObjectNode: Acthar Gel"},
+  {"id": "Rasch Overall ALS Disability Scale", "label": "Rasch Overall ALS Disability Scale", "shape": "dot", "title": "ObjectNode: Rasch Overall ALS Disability Scale"},
+  {"id": "ALS or MS", "label": "ALS or MS", "shape": "dot", "title": "ObjectNode: ALS or MS"},
+  {"id": "NCT06272487", "label": "NCT06272487", "shape": "dot", "title": "SubjectNode: NCT06272487"},
+  {"id": "Diagnosis of severe hypertension", "label": "Diagnosis of severe hypertension", "shape": "dot", "title": "ObjectNode: Diagnosis of severe hypertension"},
+  {"id": "Zilebesiran", "label": "Zilebesiran", "shape": "dot", "title": "ObjectNode: Zilebesiran"},
+  {"id": "Standard of Care", "label": "Standard of Care", "shape": "dot", "title": "ObjectNode: Standard of Care"},
+  {"id": "Percent Change from Baseline in Serum Angiotensinogen", "label": "Percent Change from Baseline in Serum Angiotensinogen", "shape": "dot", "title": "ObjectNode: Percent Change from Baseline in Serum Angiotensinogen"},
+  {"id": "NCT02438787", "label": "NCT02438787", "shape": "dot", "title": "SubjectNode: NCT02438787"},
+  {"id": "ASAS20 treatment response", "label": "ASAS20 treatment response", "shape": "dot", "title": "ObjectNode: ASAS20 treatment response"},
+  {"id": "Prior Anti-TNF Therapy", "label": "Prior Anti-TNF Therapy", "shape": "dot", "title": "ObjectNode: Prior Anti-TNF Therapy"},
+  {"id": "Early Spondyloarthritis", "label": "Early Spondyloarthritis", "shape": "dot", "title": "ObjectNode: Early Spondyloarthritis"},
+  {"id": "Abrilumab", "label": "Abrilumab", "shape": "dot", "title": "ObjectNode: Abrilumab"},
+  {"id": "ASAS40 treatment response", "label": "ASAS40 treatment response", "shape": "dot", "title": "ObjectNode: ASAS40 treatment response"},
+  {"id": "NCT04053387", "label": "NCT04053387", "shape": "dot", "title": "SubjectNode: NCT04053387"},
+  {"id": "Median Time to Improvement", "label": "Median Time to Improvement", "shape": "dot", "title": "ObjectNode: Median Time to Improvement"},
+  {"id": "at least one psoriatic plaque", "label": "at least one psoriatic plaque", "shape": "dot", "title": "ObjectNode: at least one psoriatic plaque"},
+  {"id": "sPGA (0)", "label": "sPGA (0)", "shape": "dot", "title": "ObjectNode: sPGA (0)"},
+  {"id": "VTAMA (Tapinarof) Cream", "label": "VTAMA (Tapinarof) Cream", "shape": "dot", "title": "ObjectNode: VTAMA (Tapinarof) Cream"},
+  {"id": "Potentially Clinically Important Changes", "label": "Potentially Clinically Important Changes", "shape": "dot", "title": "ObjectNode: Potentially Clinically Important Changes"},
+  {"id": "NCT05002933", "label": "NCT05002933", "shape": "dot", "title": "SubjectNode: NCT05002933"},
+  {"id": "Adults >=12 years old", "label": "Adults >=12 years old", "shape": "dot", "title": "ObjectNode: Adults >=12 years old"},
+  {"id": "Overweight and Obese Subjects With Type 2 Diabetes", "label": "Overweight and Obese Subjects With Type 2 Diabetes", "shape": "dot", "title": "ObjectNode: Overweight and Obese Subjects With Type 2 Diabetes"},
+  {"id": "Percentage of Participants Achieving a Therapeutic Glycemic Response", "label": "Percentage of Participants Achieving a Therapeutic Glycemic Response", "shape": "dot", "title": "ObjectNode: Percentage of Participants Achieving a Therapeutic Glycemic Response"},
+  {"id": "Insulin Glargine/Lixisenatide Fixed Ratio Combination", "label": "Insulin Glargine/Lixisenatide Fixed Ratio Combination", "shape": "dot", "title": "ObjectNode: Insulin Glargine/Lixisenatide Fixed Ratio Combination"},
+  {"id": "Adjusted Mean Change HbA1c", "label": "Adjusted Mean Change HbA1c", "shape": "dot", "title": "ObjectNode: Adjusted Mean Change HbA1c"},
+  {"id": "NCT05426733", "label": "NCT05426733", "shape": "dot", "title": "SubjectNode: NCT05426733"},
+  {"id": "Change mid-arm circumference", "label": "Change mid-arm circumference", "shape": "dot", "title": "ObjectNode: Change mid-arm circumference"},
+  {"id": "Change serum bile acids", "label": "Change serum bile acids", "shape": "dot", "title": "ObjectNode: Change serum bile acids"},
+  {"id": "Primary Biliary Cholangitis", "label": "Primary Biliary Cholangitis", "shape": "dot", "title": "ObjectNode: Primary Biliary Cholangitis"},
+  {"id": "Odevixibat", "label": "Odevixibat", "shape": "dot", "title": "ObjectNode: Odevixibat"},
+  {"id": "Change in Fibrosis-4 (FIB-4) Score", "label": "Change in Fibrosis-4 (FIB-4) Score", "shape": "dot", "title": "ObjectNode: Change in Fibrosis-4 (FIB-4) Score"},
+  {"id": "Change pediatric end-stage liver disease score", "label": "Change pediatric end-stage liver disease score", "shape": "dot", "title": "ObjectNode: Change pediatric end-stage liver disease score"},
+  {"id": "Change AST to platelet ratio index", "label": "Change AST to platelet ratio index", "shape": "dot", "title": "ObjectNode: Change AST to platelet ratio index"},
+  {"id": "Proportion alive", "label": "Proportion alive", "shape": "dot", "title": "ObjectNode: Proportion alive"},
+  {"id": "Completion of 104-week Treatment Period", "label": "Completion of 104-week Treatment Period", "shape": "dot", "title": "ObjectNode: Completion of 104-week Treatment Period"},
+  {"id": "Patient's written informed consent", "label": "Patient's written informed consent", "shape": "dot", "title": "ObjectNode: Patient's written informed consent"},
+  {"id": "Change height", "label": "Change height", "shape": "dot", "title": "ObjectNode: Change height"},
+  {"id": "Time to onset sentinel events", "label": "Time to onset sentinel events", "shape": "dot", "title": "ObjectNode: Time to onset sentinel events"},
+  {"id": "NCT04437433", "label": "NCT04437433", "shape": "dot", "title": "SubjectNode: NCT04437433"},
+  {"id": "Columbia Suicide Severity Rating Scale", "label": "Columbia Suicide Severity Rating Scale", "shape": "dot", "title": "ObjectNode: Columbia Suicide Severity Rating Scale"},
+  {"id": "Number of patients with clinically significant changes in vital signs", "label": "Number of patients with clinically significant changes in vital signs", "shape": "dot", "title": "ObjectNode: Number of patients with clinically significant changes in vital signs"},
+  {"id": "Migraine Headaches", "label": "Migraine Headaches", "shape": "dot", "title": "ObjectNode: Migraine Headaches"},
+  {"id": "Clinically significant abnormalities in clinical laboratory values", "label": "Clinically significant abnormalities in clinical laboratory values", "shape": "dot", "title": "ObjectNode: Clinically significant abnormalities in clinical laboratory values"},
+  {"id": "Completed all visits", "label": "Completed all visits", "shape": "dot", "title": "ObjectNode: Completed all visits"},
+  {"id": "Oral Atogepant", "label": "Oral Atogepant", "shape": "dot", "title": "ObjectNode: Oral Atogepant"},
+  {"id": "Clinically significant abnormalities in ECG", "label": "Clinically significant abnormalities in ECG", "shape": "dot", "title": "ObjectNode: Clinically significant abnormalities in ECG"},
+  {"id": "NCT04479787", "label": "NCT04479787", "shape": "dot", "title": "SubjectNode: NCT04479787"},
+  {"id": "Responder Rate PGIC", "label": "Responder Rate PGIC", "shape": "dot", "title": "ObjectNode: Responder Rate PGIC"},
+  {"id": "NRS mean change", "label": "NRS mean change", "shape": "dot", "title": "ObjectNode: NRS mean change"},
+  {"id": "Change in Back Pain", "label": "Change in Back Pain", "shape": "dot", "title": "ObjectNode: Change in Back Pain"},
+  {"id": "10 kHz Spinal Cord Stimulation", "label": "10 kHz Spinal Cord Stimulation", "shape": "dot", "title": "ObjectNode: 10 kHz Spinal Cord Stimulation"},
+  {"id": "≥ 30% decrease from baseline", "label": "≥ 30% decrease from baseline", "shape": "dot", "title": "ObjectNode: ≥ 30% decrease from baseline"},
+  {"id": "Change in OSDI", "label": "Change in OSDI", "shape": "dot", "title": "ObjectNode: Change in OSDI"},
+  {"id": "Study Composite Responder", "label": "Study Composite Responder", "shape": "dot", "title": "ObjectNode: Study Composite Responder"},
+  {"id": "Medical Management", "label": "Medical Management", "shape": "dot", "title": "ObjectNode: Medical Management"},
+  {"id": "NCT00327587", "label": "NCT00327587", "shape": "dot", "title": "SubjectNode: NCT00327587"},
+  {"id": "Olmesartan and Amlodipine", "label": "Olmesartan and Amlodipine", "shape": "dot", "title": "ObjectNode: Olmesartan and Amlodipine"},
+  {"id": "Systolic BP control", "label": "Systolic BP control", "shape": "dot", "title": "ObjectNode: Systolic BP control"},
+  {"id": "Diastolic BP ≥90 mmHg", "label": "Diastolic BP ≥90 mmHg", "shape": "dot", "title": "ObjectNode: Diastolic BP ≥90 mmHg"},
+  {"id": "Normalized blood pressure", "label": "Normalized blood pressure", "shape": "dot", "title": "ObjectNode: Normalized blood pressure"},
+  {"id": "Systolic BP ≥140 mmHg", "label": "Systolic BP ≥140 mmHg", "shape": "dot", "title": "ObjectNode: Systolic BP ≥140 mmHg"},
+  {"id": "Diastolic BP ≥80 mmHg", "label": "Diastolic BP ≥80 mmHg", "shape": "dot", "title": "ObjectNode: Diastolic BP ≥80 mmHg"},
+  {"id": "Arm circumference > 42 cm", "label": "Arm circumference > 42 cm", "shape": "dot", "title": "ObjectNode: Arm circumference > 42 cm"},
+  {"id": "Amlodipine Besylate/Benazepril", "label": "Amlodipine Besylate/Benazepril", "shape": "dot", "title": "ObjectNode: Amlodipine Besylate/Benazepril"},
+  {"id": "Diastolic blood pressure < 60 mm Hg", "label": "Diastolic blood pressure < 60 mm Hg", "shape": "dot", "title": "ObjectNode: Diastolic blood pressure < 60 mm Hg"},
+  {"id": "HCTZ 25 mg", "label": "HCTZ 25 mg", "shape": "dot", "title": "ObjectNode: HCTZ 25 mg"},
+  {"id": "NCT02618187", "label": "NCT02618187", "shape": "dot", "title": "SubjectNode: NCT02618187"},
+  {"id": "Duration of Ulcerative Colitis", "label": "Duration of Ulcerative Colitis", "shape": "dot", "title": "ObjectNode: Duration of Ulcerative Colitis"},
+  {"id": "SER-214", "label": "SER-214", "shape": "dot", "title": "ObjectNode: SER-214"},
+  {"id": "Microbiota composition analysis", "label": "Microbiota composition analysis", "shape": "dot", "title": "ObjectNode: Microbiota composition analysis"},
+  {"id": "Participants in Remission", "label": "Participants in Remission", "shape": "dot", "title": "ObjectNode: Participants in Remission"},
+  {"id": "9-point modified Mayo score", "label": "9-point modified Mayo score", "shape": "dot", "title": "ObjectNode: 9-point modified Mayo score"},
+  {"id": "NCT01429987", "label": "NCT01429987", "shape": "dot", "title": "SubjectNode: NCT01429987"},
+  {"id": "stool frequency evaluation", "label": "stool frequency evaluation", "shape": "dot", "title": "ObjectNode: stool frequency evaluation"},
+  {"id": "18 to 55 years old", "label": "18 to 55 years old", "shape": "dot", "title": "ObjectNode: 18 to 55 years old"},
+  {"id": "Plecanatide", "label": "Plecanatide", "shape": "dot", "title": "ObjectNode: Plecanatide"},
+  {"id": "12-week CSBM Frequency", "label": "12-week CSBM Frequency", "shape": "dot", "title": "ObjectNode: 12-week CSBM Frequency"},
+  {"id": "IBS-Constipation", "label": "IBS-Constipation", "shape": "dot", "title": "ObjectNode: IBS-Constipation"},
+  {"id": "Straining Score", "label": "Straining Score", "shape": "dot", "title": "ObjectNode: Straining Score"},
+  {"id": "ROME IV criteria", "label": "ROME IV criteria", "shape": "dot", "title": "ObjectNode: ROME IV criteria"},
+  {"id": "NCT04158687", "label": "NCT04158687", "shape": "dot", "title": "SubjectNode: NCT04158687"},
+  {"id": "CP-601", "label": "CP-601", "shape": "dot", "title": "ObjectNode: CP-601"},
+  {"id": "Total Personal and Social Performance", "label": "Total Personal and Social Performance", "shape": "dot", "title": "ObjectNode: Total Personal and Social Performance"},
+  {"id": "CGI-Severity Score", "label": "CGI-Severity Score", "shape": "dot", "title": "ObjectNode: CGI-Severity Score"},
+  {"id": "NCT01862887", "label": "NCT01862887", "shape": "dot", "title": "SubjectNode: NCT01862887"},
+  {"id": "regular alcohol consumption", "label": "regular alcohol consumption", "shape": "dot", "title": "ObjectNode: regular alcohol consumption"},
+  {"id": "clinically significant changes in Electrocardiogram readings", "label": "clinically significant changes in Electrocardiogram readings", "shape": "dot", "title": "ObjectNode: clinically significant changes in Electrocardiogram readings"},
+  {"id": "PF-07038124", "label": "PF-07038124", "shape": "dot", "title": "ObjectNode: PF-07038124"},
+  {"id": "Fmax", "label": "Fmax", "shape": "dot", "title": "ObjectNode: Fmax"},
+  {"id": "Healthy adult male subjects", "label": "Healthy adult male subjects", "shape": "dot", "title": "ObjectNode: Healthy adult male subjects"},
+  {"id": "Healthy male or female", "label": "Healthy male or female", "shape": "dot", "title": "ObjectNode: Healthy male or female"},
+  {"id": "QTcB change", "label": "QTcB change", "shape": "dot", "title": "ObjectNode: QTcB change"},
+  {"id": "clinically significant respiratory", "label": "clinically significant respiratory", "shape": "dot", "title": "ObjectNode: clinically significant respiratory"},
+  {"id": "Time for Cmax", "label": "Time for Cmax", "shape": "dot", "title": "ObjectNode: Time for Cmax"},
+  {"id": "clinically significant allergic disease", "label": "clinically significant allergic disease", "shape": "dot", "title": "ObjectNode: clinically significant allergic disease"},
+  {"id": "severe renal involvement at Screening", "label": "severe renal involvement at Screening", "shape": "dot", "title": "ObjectNode: severe renal involvement at Screening"},
+  {"id": "Total Fat Mass", "label": "Total Fat Mass", "shape": "dot", "title": "ObjectNode: Total Fat Mass"},
+  {"id": "endocrine abnormalities", "label": "endocrine abnormalities", "shape": "dot", "title": "ObjectNode: endocrine abnormalities"},
+  {"id": "psychiatric disease", "label": "psychiatric disease", "shape": "dot", "title": "ObjectNode: psychiatric disease"},
+  {"id": "Mean change in BMI", "label": "Mean change in BMI", "shape": "dot", "title": "ObjectNode: Mean change in BMI"},
+  {"id": "hepatic dysfunction", "label": "hepatic dysfunction", "shape": "dot", "title": "ObjectNode: hepatic dysfunction"},
+  {"id": "neurological disorder", "label": "neurological disorder", "shape": "dot", "title": "ObjectNode: neurological disorder"},
+  {"id": "positive urine drug screen", "label": "positive urine drug screen", "shape": "dot", "title": "ObjectNode: positive urine drug screen"},
+  {"id": "AUC from time zero", "label": "AUC from time zero", "shape": "dot", "title": "ObjectNode: AUC from time zero"},
+  {"id": "Clinically significant haematology assessment abnormalities", "label": "Clinically significant haematology assessment abnormalities", "shape": "dot", "title": "ObjectNode: Clinically significant haematology assessment abnormalities"},
+  {"id": "gastrointestinal abnormalities", "label": "gastrointestinal abnormalities", "shape": "dot", "title": "ObjectNode: gastrointestinal abnormalities"},
+  {"id": "NCT00397033", "label": "NCT00397033", "shape": "dot", "title": "SubjectNode: NCT00397033"},
+  {"id": "PANSS General Psychopathology Subscale", "label": "PANSS General Psychopathology Subscale", "shape": "dot", "title": "ObjectNode: PANSS General Psychopathology Subscale"},
+  {"id": "Greater Than 50% Reduction", "label": "Greater Than 50% Reduction", "shape": "dot", "title": "ObjectNode: Greater Than 50% Reduction"},
+  {"id": "Oral Paliperidone Extended-Release", "label": "Oral Paliperidone Extended-Release", "shape": "dot", "title": "ObjectNode: Oral Paliperidone Extended-Release"},
+  {"id": "NCT04172233", "label": "NCT04172233", "shape": "dot", "title": "SubjectNode: NCT04172233"},
+  {"id": "mPASI-90", "label": "mPASI-90", "shape": "dot", "title": "ObjectNode: mPASI-90"},
+  {"id": "PASI ≥ 12 points", "label": "PASI ≥ 12 points", "shape": "dot", "title": "ObjectNode: PASI ≥ 12 points"},
+  {"id": "AKST1210", "label": "AKST1210", "shape": "dot", "title": "ObjectNode: AKST1210"},
+  {"id": "Change in Physician's Global Assessment", "label": "Change in Physician's Global Assessment", "shape": "dot", "title": "ObjectNode: Change in Physician's Global Assessment"},
+  {"id": "mPASI-75", "label": "mPASI-75", "shape": "dot", "title": "ObjectNode: mPASI-75"},
+  {"id": "10% body surface areas", "label": "10% body surface areas", "shape": "dot", "title": "ObjectNode: 10% body surface areas"},
+  {"id": "Physician's global assessment scores", "label": "Physician's global assessment scores", "shape": "dot", "title": "ObjectNode: Physician's global assessment scores"},
+  {"id": "NCT05522387", "label": "NCT05522387", "shape": "dot", "title": "SubjectNode: NCT05522387"},
+  {"id": "XPro1595", "label": "XPro1595", "shape": "dot", "title": "ObjectNode: XPro1595"},
+  {"id": "Clinical Dementia Rating-Sum of Boxes", "label": "Clinical Dementia Rating-Sum of Boxes", "shape": "dot", "title": "ObjectNode: Clinical Dementia Rating-Sum of Boxes"},
+  {"id": "predefined criteria", "label": "predefined criteria", "shape": "dot", "title": "ObjectNode: predefined criteria"},
+  {"id": "NCT00848354", "label": "NCT00848354", "shape": "dot", "title": "SubjectNode: NCT00848354"},
+  {"id": "ACR20 Responders", "label": "ACR20 Responders", "shape": "dot", "title": "ObjectNode: ACR20 Responders"},
+  {"id": "HAI Score", "label": "HAI Score", "shape": "dot", "title": "ObjectNode: HAI Score"},
+  {"id": "Etokimab", "label": "Etokimab", "shape": "dot", "title": "ObjectNode: Etokimab"},
+  {"id": "SF36 Score", "label": "SF36 Score", "shape": "dot", "title": "ObjectNode: SF36 Score"},
+  {"id": "arthritis pain", "label": "arthritis pain", "shape": "dot", "title": "ObjectNode: arthritis pain"},
+  {"id": "NCT02674633", "label": "NCT02674633", "shape": "dot", "title": "SubjectNode: NCT02674633"},
+  {"id": "ADHD-RS-IV Scores", "label": "ADHD-RS-IV Scores", "shape": "dot", "title": "ObjectNode: ADHD-RS-IV Scores"},
+  {"id": "TOVA API", "label": "TOVA API", "shape": "dot", "title": "ObjectNode: TOVA API"},
+  {"id": "Software", "label": "Software", "shape": "dot", "title": "ObjectNode: Software"},
+  {"id": "DSM-5 diagnostic criteria", "label": "DSM-5 diagnostic criteria", "shape": "dot", "title": "ObjectNode: DSM-5 diagnostic criteria"},
+  {"id": "ADHD-RS change", "label": "ADHD-RS change", "shape": "dot", "title": "ObjectNode: ADHD-RS change"},
+  {"id": "NCT00886587", "label": "NCT00886587", "shape": "dot", "title": "SubjectNode: NCT00886587"},
+  {"id": "device intervention", "label": "device intervention", "shape": "dot", "title": "ObjectNode: device intervention"},
+  {"id": "EASI score at Week 48", "label": "EASI score at Week 48", "shape": "dot", "title": "ObjectNode: EASI score at Week 48"},
+  {"id": "Able to provide informed consent", "label": "Able to provide informed consent", "shape": "dot", "title": "ObjectNode: Able to provide informed consent"},
+  {"id": "Diagnosis of AD/ADRD", "label": "Diagnosis of AD/ADRD", "shape": "dot", "title": "ObjectNode: Diagnosis of AD/ADRD"},
+  {"id": "Itch Score Day 43", "label": "Itch Score Day 43", "shape": "dot", "title": "ObjectNode: Itch Score Day 43"},
+  {"id": "IGADA Score Day 43", "label": "IGADA Score Day 43", "shape": "dot", "title": "ObjectNode: IGADA Score Day 43"},
+  {"id": "Post-menarchal female", "label": "Post-menarchal female", "shape": "dot", "title": "ObjectNode: Post-menarchal female"},
+  {"id": "negative urine pregnancy test result", "label": "negative urine pregnancy test result", "shape": "dot", "title": "ObjectNode: negative urine pregnancy test result"},
+  {"id": "NCT05054387", "label": "NCT05054387", "shape": "dot", "title": "SubjectNode: NCT05054387"},
+  {"id": "eGFR > 60 ml/min/1.73 m2", "label": "eGFR > 60 ml/min/1.73 m2", "shape": "dot", "title": "ObjectNode: eGFR > 60 ml/min/1.73 m2"},
+  {"id": "12 years or older", "label": "12 years or older", "shape": "dot", "title": "ObjectNode: 12 years or older"},
+  {"id": "plasma or leukocyte αGAL activity deficient", "label": "plasma or leukocyte αGAL activity deficient", "shape": "dot", "title": "ObjectNode: plasma or leukocyte αGAL activity deficient"},
+  {"id": "Fabrazyme", "label": "Fabrazyme", "shape": "dot", "title": "ObjectNode: Fabrazyme"},
+  {"id": "diagnosed with Fabry disease", "label": "diagnosed with Fabry disease", "shape": "dot", "title": "ObjectNode: diagnosed with Fabry disease"},
+  {"id": "change of Fabry disease symptoms", "label": "change of Fabry disease symptoms", "shape": "dot", "title": "ObjectNode: change of Fabry disease symptoms"},
+  {"id": "naive to agalsidase beta", "label": "naive to agalsidase beta", "shape": "dot", "title": "ObjectNode: naive to agalsidase beta"},
+  {"id": "NCT04360187", "label": "NCT04360187", "shape": "dot", "title": "SubjectNode: NCT04360187"},
+  {"id": "Serious AEs", "label": "Serious AEs", "shape": "dot", "title": "ObjectNode: Serious AEs"},
+  {"id": "ages 2 years and older", "label": "ages 2 years and older", "shape": "dot", "title": "ObjectNode: ages 2 years and older"},
+  {"id": "Eczema Area and Severity Index (EASI) of ≥12 and <48", "label": "Eczema Area and Severity Index (EASI) of ≥12 and <48", "shape": "dot", "title": "ObjectNode: Eczema Area and Severity Index (EASI) of ≥12 and <48"},
+  {"id": "Crisaborole", "label": "Crisaborole", "shape": "dot", "title": "ObjectNode: Crisaborole"},
+  {"id": "NCT00678587", "label": "NCT00678587", "shape": "dot", "title": "SubjectNode: NCT00678587"},
+  {"id": "Thrombocytopenia", "label": "Thrombocytopenia", "shape": "dot", "title": "ObjectNode: Thrombocytopenia"},
+  {"id": "Hepatobiliary fibrosis", "label": "Hepatobiliary fibrosis", "shape": "dot", "title": "ObjectNode: Hepatobiliary fibrosis"},
+  {"id": "platelet count ≥ 100", "label": "platelet count ≥ 100", "shape": "dot", "title": "ObjectNode: platelet count ≥ 100"},
+  {"id": "Change in bleeding score", "label": "Change in bleeding score", "shape": "dot", "title": "ObjectNode: Change in bleeding score"},
+  {"id": "Platelet transfusion independence", "label": "Platelet transfusion independence", "shape": "dot", "title": "ObjectNode: Platelet transfusion independence"},
+  {"id": "Switched to eltrombopag or romiplostim", "label": "Switched to eltrombopag or romiplostim", "shape": "dot", "title": "ObjectNode: Switched to eltrombopag or romiplostim"},
+  {"id": "NCT01098487", "label": "NCT01098487", "shape": "dot", "title": "SubjectNode: NCT01098487"},
+  {"id": "Collagen Level", "label": "Collagen Level", "shape": "dot", "title": "ObjectNode: Collagen Level"},
+  {"id": "Chronic Immune Thrombocytopenic Purpura", "label": "Chronic Immune Thrombocytopenic Purpura", "shape": "dot", "title": "ObjectNode: Chronic Immune Thrombocytopenic Purpura"},
+  {"id": "MF Grade change", "label": "MF Grade change", "shape": "dot", "title": "ObjectNode: MF Grade change"},
+  {"id": "centrally-reviewed BM biopsy", "label": "centrally-reviewed BM biopsy", "shape": "dot", "title": "ObjectNode: centrally-reviewed BM biopsy"},
+  {"id": "NCT03772587", "label": "NCT03772587", "shape": "dot", "title": "SubjectNode: NCT03772587"},
+  {"id": "Day 1 up to 393", "label": "Day 1 up to 393", "shape": "dot", "title": "ObjectNode: Day 1 up to 393"},
+  {"id": "Number of Participants Reporting TEAEs", "label": "Number of Participants Reporting TEAEs", "shape": "dot", "title": "ObjectNode: Number of Participants Reporting TEAEs"},
+  {"id": "Lambert Eaton Myasthenic Syndrome", "label": "Lambert Eaton Myasthenic Syndrome", "shape": "dot", "title": "ObjectNode: Lambert Eaton Myasthenic Syndrome"},
+  {"id": "Number of SAEs", "label": "Number of SAEs", "shape": "dot", "title": "ObjectNode: Number of SAEs"},
+  {"id": "M2951", "label": "M2951", "shape": "dot", "title": "ObjectNode: M2951"},
+  {"id": "Number of participants with AESI", "label": "Number of participants with AESI", "shape": "dot", "title": "ObjectNode: Number of participants with AESI"},
+  {"id": "NCT00876187", "label": "NCT00876187", "shape": "dot", "title": "SubjectNode: NCT00876187"},
+  {"id": "Daily LBPI Score", "label": "Daily LBPI Score", "shape": "dot", "title": "ObjectNode: Daily LBPI Score"},
+  {"id": "Chronic Low-Back Pain", "label": "Chronic Low-Back Pain", "shape": "dot", "title": "ObjectNode: Chronic Low-Back Pain"},
+  {"id": "Baseline Observation Carried Forward", "label": "Baseline Observation Carried Forward", "shape": "dot", "title": "ObjectNode: Baseline Observation Carried Forward"},
+  {"id": "Patient Global Improvement", "label": "Patient Global Improvement", "shape": "dot", "title": "ObjectNode: Patient Global Improvement"},
+  {"id": "Subcutaneous Tanezumab", "label": "Subcutaneous Tanezumab", "shape": "dot", "title": "ObjectNode: Subcutaneous Tanezumab"},
+  {"id": "QMG Total Score", "label": "QMG Total Score", "shape": "dot", "title": "ObjectNode: QMG Total Score"},
+  {"id": "NCT00660387", "label": "NCT00660387", "shape": "dot", "title": "SubjectNode: NCT00660387"},
+  {"id": "Levodopa/Carbidopa/Entacapone", "label": "Levodopa/Carbidopa/Entacapone", "shape": "dot", "title": "ObjectNode: Levodopa/Carbidopa/Entacapone"},
+  {"id": "Average Daily Normalized \"Off\" Time", "label": "Average Daily Normalized \"Off\" Time", "shape": "dot", "title": "ObjectNode: Average Daily Normalized \"Off\" Time"},
+  {"id": "Average Daily Normalized \"On\" Time", "label": "Average Daily Normalized \"On\" Time", "shape": "dot", "title": "ObjectNode: Average Daily Normalized \"On\" Time"},
+  {"id": "Change From Baseline in Parkinson's Disease Questionnaire-39 Summary Index Score", "label": "Change From Baseline in Parkinson's Disease Questionnaire-39 Summary Index Score", "shape": "dot", "title": "ObjectNode: Change From Baseline in Parkinson's Disease Questionnaire-39 Summary Index Score"},
+  {"id": "early-stage Parkinson's disease", "label": "early-stage Parkinson's disease", "shape": "dot", "title": "ObjectNode: early-stage Parkinson's disease"},
+  {"id": "NCT01255787", "label": "NCT01255787", "shape": "dot", "title": "SubjectNode: NCT01255787"},
+  {"id": "Major Depressive Disorder With Mixed Features", "label": "Major Depressive Disorder With Mixed Features", "shape": "dot", "title": "ObjectNode: Major Depressive Disorder With Mixed Features"},
+  {"id": "Suvorexant", "label": "Suvorexant", "shape": "dot", "title": "ObjectNode: Suvorexant"},
+  {"id": "Baseline value", "label": "Baseline value", "shape": "dot", "title": "ObjectNode: Baseline value"},
+  {"id": "CGI-C Scale Scores", "label": "CGI-C Scale Scores", "shape": "dot", "title": "ObjectNode: CGI-C Scale Scores"},
+  {"id": "MADRS Response Rate", "label": "MADRS Response Rate", "shape": "dot", "title": "ObjectNode: MADRS Response Rate"},
+  {"id": "MADRS total score ≥22", "label": "MADRS total score ≥22", "shape": "dot", "title": "ObjectNode: MADRS total score ≥22"},
+  {"id": "MADRS Remission at Week 8", "label": "MADRS Remission at Week 8", "shape": "dot", "title": "ObjectNode: MADRS Remission at Week 8"},
+  {"id": "NCT00877487", "label": "NCT00877487", "shape": "dot", "title": "SubjectNode: NCT00877487"},
+  {"id": "Concerta", "label": "Concerta", "shape": "dot", "title": "ObjectNode: Concerta"},
+  {"id": "documented ADHD diagnosis", "label": "documented ADHD diagnosis", "shape": "dot", "title": "ObjectNode: documented ADHD diagnosis"},
+  {"id": "Documented history of ADHD diagnosis", "label": "Documented history of ADHD diagnosis", "shape": "dot", "title": "ObjectNode: Documented history of ADHD diagnosis"},
+  {"id": "stable SPD489 treatment 6 months", "label": "stable SPD489 treatment 6 months", "shape": "dot", "title": "ObjectNode: stable SPD489 treatment 6 months"},
+  {"id": "NCT01524887", "label": "NCT01524887", "shape": "dot", "title": "SubjectNode: NCT01524887"},
+  {"id": "Change in ADCS-ADL", "label": "Change in ADCS-ADL", "shape": "dot", "title": "ObjectNode: Change in ADCS-ADL"},
+  {"id": "Baseline to ≤20 weeks", "label": "Baseline to ≤20 weeks", "shape": "dot", "title": "ObjectNode: Baseline to ≤20 weeks"},
+  {"id": "ADAS-Cog-11 Scores", "label": "ADAS-Cog-11 Scores", "shape": "dot", "title": "ObjectNode: ADAS-Cog-11 Scores"},
+  {"id": "IGIV", "label": "IGIV", "shape": "dot", "title": "ObjectNode: IGIV"},
+  {"id": "Neuropsychiatry Inventory", "label": "Neuropsychiatry Inventory", "shape": "dot", "title": "ObjectNode: Neuropsychiatry Inventory"},
+  {"id": "NCT01617187", "label": "NCT01617187", "shape": "dot", "title": "SubjectNode: NCT01617187"},
+  {"id": "Pimavanserin", "label": "Pimavanserin", "shape": "dot", "title": "ObjectNode: Pimavanserin"},
+  {"id": "PANSS Responders", "label": "PANSS Responders", "shape": "dot", "title": "ObjectNode: PANSS Responders"},
+  {"id": "NCT03465787", "label": "NCT03465787", "shape": "dot", "title": "SubjectNode: NCT03465787"},
+  {"id": "no prior lurasidone trial", "label": "no prior lurasidone trial", "shape": "dot", "title": "ObjectNode: no prior lurasidone trial"},
+  {"id": "switched from other antipsychotic drugs", "label": "switched from other antipsychotic drugs", "shape": "dot", "title": "ObjectNode: switched from other antipsychotic drugs"},
+  {"id": "age 18 or above and below 65", "label": "age 18 or above and below 65", "shape": "dot", "title": "ObjectNode: age 18 or above and below 65"},
+  {"id": "no drug abuse", "label": "no drug abuse", "shape": "dot", "title": "ObjectNode: no drug abuse"},
+  {"id": "no chronic CNS disease", "label": "no chronic CNS disease", "shape": "dot", "title": "ObjectNode: no chronic CNS disease"},
+  {"id": "no pregnancy or breastfeeding", "label": "no pregnancy or breastfeeding", "shape": "dot", "title": "ObjectNode: no pregnancy or breastfeeding"},
+  {"id": "reasonably good health", "label": "reasonably good health", "shape": "dot", "title": "ObjectNode: reasonably good health"},
+  {"id": "able to cooperate", "label": "able to cooperate", "shape": "dot", "title": "ObjectNode: able to cooperate"},
+  {"id": "NCT05865496", "label": "NCT05865496", "shape": "dot", "title": "SubjectNode: NCT05865496"},
+  {"id": "UPSIT Score", "label": "UPSIT Score", "shape": "dot", "title": "ObjectNode: UPSIT Score"},
+  {"id": "611", "label": "611", "shape": "dot", "title": "ObjectNode: 611"},
+  {"id": "Nasal blockade/obstruction/congestion", "label": "Nasal blockade/obstruction/congestion", "shape": "dot", "title": "ObjectNode: Nasal blockade/obstruction/congestion"},
+  {"id": "Lysholm Score", "label": "Lysholm Score", "shape": "dot", "title": "ObjectNode: Lysholm Score"},
+  {"id": "Nasal polyp score ≥ 4", "label": "Nasal polyp score ≥ 4", "shape": "dot", "title": "ObjectNode: Nasal polyp score ≥ 4"},
+  {"id": "Up to 48 weeks", "label": "Up to 48 weeks", "shape": "dot", "title": "ObjectNode: Up to 48 weeks"},
+  {"id": "Bilateral NPS", "label": "Bilateral NPS", "shape": "dot", "title": "ObjectNode: Bilateral NPS"},
+  {"id": "NCT03909516", "label": "NCT03909516", "shape": "dot", "title": "SubjectNode: NCT03909516"},
+  {"id": "Average Evening Pain Intensity", "label": "Average Evening Pain Intensity", "shape": "dot", "title": "ObjectNode: Average Evening Pain Intensity"},
+  {"id": "Iovera° Device", "label": "Iovera° Device", "shape": "dot", "title": "ObjectNode: Iovera° Device"},
+  {"id": "Single Assessment Numerical Evaluation", "label": "Single Assessment Numerical Evaluation", "shape": "dot", "title": "ObjectNode: Single Assessment Numerical Evaluation"},
+  {"id": "Lateral Ankle Ligament Reconstruction", "label": "Lateral Ankle Ligament Reconstruction", "shape": "dot", "title": "ObjectNode: Lateral Ankle Ligament Reconstruction"},
+  {"id": "Area-Under-Effect", "label": "Area-Under-Effect", "shape": "dot", "title": "ObjectNode: Area-Under-Effect"},
+  {"id": "Baseline to 10 days post-surgery", "label": "Baseline to 10 days post-surgery", "shape": "dot", "title": "ObjectNode: Baseline to 10 days post-surgery"},
+  {"id": "Oxford Knee Score", "label": "Oxford Knee Score", "shape": "dot", "title": "ObjectNode: Oxford Knee Score"},
+  {"id": "NCT03836716", "label": "NCT03836716", "shape": "dot", "title": "SubjectNode: NCT03836716"},
+  {"id": "Hematology Screening parameters", "label": "Hematology Screening parameters", "shape": "dot", "title": "ObjectNode: Hematology Screening parameters"},
+  {"id": "Aramchol Meglumine", "label": "Aramchol Meglumine", "shape": "dot", "title": "ObjectNode: Aramchol Meglumine"},
+  {"id": "Mean Change EASI", "label": "Mean Change EASI", "shape": "dot", "title": "ObjectNode: Mean Change EASI"},
+  {"id": "IMP dose", "label": "IMP dose", "shape": "dot", "title": "ObjectNode: IMP dose"},
+  {"id": "NCT02111096", "label": "NCT02111096", "shape": "dot", "title": "SubjectNode: NCT02111096"},
+  {"id": "Fasting and Post meal Glucose", "label": "Fasting and Post meal Glucose", "shape": "dot", "title": "ObjectNode: Fasting and Post meal Glucose"},
+  {"id": "ALT and AST elevation", "label": "ALT and AST elevation", "shape": "dot", "title": "ObjectNode: ALT and AST elevation"},
+  {"id": "hepatic fat fraction ≥ 5%", "label": "hepatic fat fraction ≥ 5%", "shape": "dot", "title": "ObjectNode: hepatic fat fraction ≥ 5%"},
+  {"id": "Fasting Triglyceride Levels", "label": "Fasting Triglyceride Levels", "shape": "dot", "title": "ObjectNode: Fasting Triglyceride Levels"},
+  {"id": "Baseline Weight", "label": "Baseline Weight", "shape": "dot", "title": "ObjectNode: Baseline Weight"},
+  {"id": "Hemoglobin A1c Levels", "label": "Hemoglobin A1c Levels", "shape": "dot", "title": "ObjectNode: Hemoglobin A1c Levels"},
+  {"id": "NCT02046616", "label": "NCT02046616", "shape": "dot", "title": "SubjectNode: NCT02046616"},
+  {"id": "Change from Baseline in DAS28-CRP", "label": "Change from Baseline in DAS28-CRP", "shape": "dot", "title": "ObjectNode: Change from Baseline in DAS28-CRP"},
+  {"id": "methotrexate-inadequate responders", "label": "methotrexate-inadequate responders", "shape": "dot", "title": "ObjectNode: methotrexate-inadequate responders"},
+  {"id": "Percentage of Participants Achieving Pediatric American College of Rheumatology Pediatric 30% Response", "label": "Percentage of Participants Achieving Pediatric American College of Rheumatology Pediatric 30% Response", "shape": "dot", "title": "ObjectNode: Percentage of Participants Achieving Pediatric American College of Rheumatology Pediatric 30% Response"},
+  {"id": "Tocilizumab Subcutaneous", "label": "Tocilizumab Subcutaneous", "shape": "dot", "title": "ObjectNode: Tocilizumab Subcutaneous"},
+  {"id": "NCT01647516", "label": "NCT01647516", "shape": "dot", "title": "SubjectNode: NCT01647516"},
+  {"id": "Clinical Response 100", "label": "Clinical Response 100", "shape": "dot", "title": "ObjectNode: Clinical Response 100"},
+  {"id": "Ozarelix", "label": "Ozarelix", "shape": "dot", "title": "ObjectNode: Ozarelix"},
+  {"id": "NCT01058096", "label": "NCT01058096", "shape": "dot", "title": "SubjectNode: NCT01058096"},
+  {"id": "Aripiprazole Lauroxil", "label": "Aripiprazole Lauroxil", "shape": "dot", "title": "ObjectNode: Aripiprazole Lauroxil"},
+  {"id": "Adults With Bipolar I Disorder", "label": "Adults With Bipolar I Disorder", "shape": "dot", "title": "ObjectNode: Adults With Bipolar I Disorder"},
+  {"id": "YMRS score", "label": "YMRS score", "shape": "dot", "title": "ObjectNode: YMRS score"},
+  {"id": "CGI-Improvement Score", "label": "CGI-Improvement Score", "shape": "dot", "title": "ObjectNode: CGI-Improvement Score"},
+  {"id": "NCT02317016", "label": "NCT02317016", "shape": "dot", "title": "SubjectNode: NCT02317016"},
+  {"id": "AUC of Rosuvastatin", "label": "AUC of Rosuvastatin", "shape": "dot", "title": "ObjectNode: AUC of Rosuvastatin"},
+  {"id": "AZD9668", "label": "AZD9668", "shape": "dot", "title": "ObjectNode: AZD9668"},
+  {"id": "tmax of rosuvastatin", "label": "tmax of rosuvastatin", "shape": "dot", "title": "ObjectNode: tmax of rosuvastatin"},
+  {"id": "Maximally Tolerated Statin", "label": "Maximally Tolerated Statin", "shape": "dot", "title": "ObjectNode: Maximally Tolerated Statin"},
+  {"id": "Metastatic Non-squamous Non-Small-Cell Lung Cancer", "label": "Metastatic Non-squamous Non-Small-Cell Lung Cancer", "shape": "dot", "title": "ObjectNode: Metastatic Non-squamous Non-Small-Cell Lung Cancer"},
+  {"id": "NCT04839016", "label": "NCT04839016", "shape": "dot", "title": "SubjectNode: NCT04839016"},
+  {"id": "inadequately controlled by topical treatment", "label": "inadequately controlled by topical treatment", "shape": "dot", "title": "ObjectNode: inadequately controlled by topical treatment"},
+  {"id": "PASI-75 Score", "label": "PASI-75 Score", "shape": "dot", "title": "ObjectNode: PASI-75 Score"},
+  {"id": "sPGA of Clear or Almost Clear at Week 16", "label": "sPGA of Clear or Almost Clear at Week 16", "shape": "dot", "title": "ObjectNode: sPGA of Clear or Almost Clear at Week 16"},
+  {"id": "disease inadequately controlled", "label": "disease inadequately controlled", "shape": "dot", "title": "ObjectNode: disease inadequately controlled"},
+  {"id": "inadequate topical response", "label": "inadequate topical response", "shape": "dot", "title": "ObjectNode: inadequate topical response"},
+  {"id": "BSA score ≥ 10%", "label": "BSA score ≥ 10%", "shape": "dot", "title": "ObjectNode: BSA score ≥ 10%"},
+  {"id": "PASI-75 at Week 24", "label": "PASI-75 at Week 24", "shape": "dot", "title": "ObjectNode: PASI-75 at Week 24"},
+  {"id": "Mild to Severe Plaque Psoriasis", "label": "Mild to Severe Plaque Psoriasis", "shape": "dot", "title": "ObjectNode: Mild to Severe Plaque Psoriasis"},
+  {"id": "sPGA score ≥ 3 points", "label": "sPGA score ≥ 3 points", "shape": "dot", "title": "ObjectNode: sPGA score ≥ 3 points"},
+  {"id": "SHR0302", "label": "SHR0302", "shape": "dot", "title": "ObjectNode: SHR0302"},
+  {"id": "NCT03971422", "label": "NCT03971422", "shape": "dot", "title": "SubjectNode: NCT03971422"},
+  {"id": "Baseline up to Day 21", "label": "Baseline up to Day 21", "shape": "dot", "title": "ObjectNode: Baseline up to Day 21"},
+  {"id": "Romosozumab", "label": "Romosozumab", "shape": "dot", "title": "ObjectNode: Romosozumab"},
+  {"id": "Percentage of Participants Achieving MG-ADL Response", "label": "Percentage of Participants Achieving MG-ADL Response", "shape": "dot", "title": "ObjectNode: Percentage of Participants Achieving MG-ADL Response"},
+  {"id": "NCT03845075", "label": "NCT03845075", "shape": "dot", "title": "SubjectNode: NCT03845075"},
+  {"id": "Liver function parameters", "label": "Liver function parameters", "shape": "dot", "title": "ObjectNode: Liver function parameters"},
+  {"id": "Metoprolol Succinate Prolonged-Release Tablet", "label": "Metoprolol Succinate Prolonged-Release Tablet", "shape": "dot", "title": "ObjectNode: Metoprolol Succinate Prolonged-Release Tablet"},
+  {"id": "Number of Participants With Any Treatment-Emergent Adverse Events", "label": "Number of Participants With Any Treatment-Emergent Adverse Events", "shape": "dot", "title": "ObjectNode: Number of Participants With Any Treatment-Emergent Adverse Events"},
+  {"id": "Acquired Hypothalamic Obesity", "label": "Acquired Hypothalamic Obesity", "shape": "dot", "title": "ObjectNode: Acquired Hypothalamic Obesity"},
+  {"id": "Change from Baseline in Average Heart Rate", "label": "Change from Baseline in Average Heart Rate", "shape": "dot", "title": "ObjectNode: Change from Baseline in Average Heart Rate"},
+  {"id": "Tesofensine", "label": "Tesofensine", "shape": "dot", "title": "ObjectNode: Tesofensine"},
+  {"id": "Serum Creatinine Elevations", "label": "Serum Creatinine Elevations", "shape": "dot", "title": "ObjectNode: Serum Creatinine Elevations"},
+  {"id": "Hematology Laboratory Results", "label": "Hematology Laboratory Results", "shape": "dot", "title": "ObjectNode: Hematology Laboratory Results"},
+  {"id": "NCT04507659", "label": "NCT04507659", "shape": "dot", "title": "SubjectNode: NCT04507659"},
+  {"id": "Sacroiliitis", "label": "Sacroiliitis", "shape": "dot", "title": "ObjectNode: Sacroiliitis"},
+  {"id": "≥ 20%", "label": "≥ 20%", "shape": "dot", "title": "ObjectNode: ≥ 20%"},
+  {"id": "ASAS20 response at Week 12", "label": "ASAS20 response at Week 12", "shape": "dot", "title": "ObjectNode: ASAS20 response at Week 12"},
+  {"id": "Jaktinib Hydrochloride Tablets", "label": "Jaktinib Hydrochloride Tablets", "shape": "dot", "title": "ObjectNode: Jaktinib Hydrochloride Tablets"},
+  {"id": "NCT02868359", "label": "NCT02868359", "shape": "dot", "title": "SubjectNode: NCT02868359"},
+  {"id": "Pain scoring", "label": "Pain scoring", "shape": "dot", "title": "ObjectNode: Pain scoring"},
+  {"id": "Pain Interference on Sleep", "label": "Pain Interference on Sleep", "shape": "dot", "title": "ObjectNode: Pain Interference on Sleep"},
+  {"id": "Neck Disability Index Score", "label": "Neck Disability Index Score", "shape": "dot", "title": "ObjectNode: Neck Disability Index Score"},
+  {"id": "Lyrica", "label": "Lyrica", "shape": "dot", "title": "ObjectNode: Lyrica"},
+  {"id": "EuroQol 5 Dimensions 5 Levels", "label": "EuroQol 5 Dimensions 5 Levels", "shape": "dot", "title": "ObjectNode: EuroQol 5 Dimensions 5 Levels"},
+  {"id": "Rescue medication consumption", "label": "Rescue medication consumption", "shape": "dot", "title": "ObjectNode: Rescue medication consumption"},
+  {"id": "NCT01649375", "label": "NCT01649375", "shape": "dot", "title": "SubjectNode: NCT01649375"},
+  {"id": "securkinumab", "label": "securkinumab", "shape": "dot", "title": "ObjectNode: securkinumab"},
+  {"id": "high-sensitivity CRP", "label": "high-sensitivity CRP", "shape": "dot", "title": "ObjectNode: high-sensitivity CRP"},
+  {"id": "NCT00809159", "label": "NCT00809159", "shape": "dot", "title": "SubjectNode: NCT00809159"},
+  {"id": "AIN457", "label": "AIN457", "shape": "dot", "title": "ObjectNode: AIN457"},
+  {"id": "Moderate to severe CD", "label": "Moderate to severe CD", "shape": "dot", "title": "ObjectNode: Moderate to severe CD"},
+  {"id": "BASMI Score", "label": "BASMI Score", "shape": "dot", "title": "ObjectNode: BASMI Score"},
+  {"id": "NCT00365859", "label": "NCT00365859", "shape": "dot", "title": "SubjectNode: NCT00365859"},
+  {"id": "screening to week 52/early termination", "label": "screening to week 52/early termination", "shape": "dot", "title": "ObjectNode: screening to week 52/early termination"},
+  {"id": "Autism Spectrum Disorders", "label": "Autism Spectrum Disorders", "shape": "dot", "title": "ObjectNode: Autism Spectrum Disorders"},
+  {"id": "Abnormal Involuntary Movement Scale", "label": "Abnormal Involuntary Movement Scale", "shape": "dot", "title": "ObjectNode: Abnormal Involuntary Movement Scale"},
+  {"id": "NCT04312659", "label": "NCT04312659", "shape": "dot", "title": "SubjectNode: NCT04312659"},
+  {"id": "Children aged 2-15 years", "label": "Children aged 2-15 years", "shape": "dot", "title": "ObjectNode: Children aged 2-15 years"},
+  {"id": "TA-650(Infliximab)", "label": "TA-650(Infliximab)", "shape": "dot", "title": "ObjectNode: TA-650(Infliximab)"},
+  {"id": "Change From Baseline in Height-for-age Z-score", "label": "Change From Baseline in Height-for-age Z-score", "shape": "dot", "title": "ObjectNode: Change From Baseline in Height-for-age Z-score"},
+  {"id": "NCT04098575", "label": "NCT04098575", "shape": "dot", "title": "SubjectNode: NCT04098575"},
+  {"id": "Biphasic Remogliflozin Etabonate", "label": "Biphasic Remogliflozin Etabonate", "shape": "dot", "title": "ObjectNode: Biphasic Remogliflozin Etabonate"},
+  {"id": "NCT04731675", "label": "NCT04731675", "shape": "dot", "title": "SubjectNode: NCT04731675"},
+  {"id": "AMX0035", "label": "AMX0035", "shape": "dot", "title": "ObjectNode: AMX0035"},
+  {"id": "Tenosynovial Giant Cell Tumor of the Knee", "label": "Tenosynovial Giant Cell Tumor of the Knee", "shape": "dot", "title": "ObjectNode: Tenosynovial Giant Cell Tumor of the Knee"},
+  {"id": "WOMAC physical function sub-score", "label": "WOMAC physical function sub-score", "shape": "dot", "title": "ObjectNode: WOMAC physical function sub-score"},
+  {"id": "Overall Tumor Response", "label": "Overall Tumor Response", "shape": "dot", "title": "ObjectNode: Overall Tumor Response"},
+  {"id": "Change in Active Range of Motion", "label": "Change in Active Range of Motion", "shape": "dot", "title": "ObjectNode: Change in Active Range of Motion"},
+  {"id": "NCT03881059", "label": "NCT03881059", "shape": "dot", "title": "SubjectNode: NCT03881059"},
+  {"id": "PASI100 response", "label": "PASI100 response", "shape": "dot", "title": "ObjectNode: PASI100 response"},
+  {"id": "BMS-986231", "label": "BMS-986231", "shape": "dot", "title": "ObjectNode: BMS-986231"},
+  {"id": "History psoriatic arthritis", "label": "History psoriatic arthritis", "shape": "dot", "title": "ObjectNode: History psoriatic arthritis"},
+  {"id": "tender/painful joint count", "label": "tender/painful joint count", "shape": "dot", "title": "ObjectNode: tender/painful joint count"},
+  {"id": "NCT04680975", "label": "NCT04680975", "shape": "dot", "title": "SubjectNode: NCT04680975"},
+  {"id": "Oral Belumosudil", "label": "Oral Belumosudil", "shape": "dot", "title": "ObjectNode: Oral Belumosudil"},
+  {"id": "new onset lung fibrosis", "label": "new onset lung fibrosis", "shape": "dot", "title": "ObjectNode: new onset lung fibrosis"},
+  {"id": "Percent of the predicted forced expiratory volume over 1 second", "label": "Percent of the predicted forced expiratory volume over 1 second", "shape": "dot", "title": "ObjectNode: Percent of the predicted forced expiratory volume over 1 second"},
+  {"id": "current active renal disease", "label": "current active renal disease", "shape": "dot", "title": "ObjectNode: current active renal disease"},
+  {"id": "mRSS", "label": "mRSS", "shape": "dot", "title": "ObjectNode: mRSS"},
+  {"id": "Diffuse Systemic Sclerosis", "label": "Diffuse Systemic Sclerosis", "shape": "dot", "title": "ObjectNode: Diffuse Systemic Sclerosis"},
+  {"id": "cardiac failure", "label": "cardiac failure", "shape": "dot", "title": "ObjectNode: cardiac failure"},
+  {"id": "Pulmonary Vascular Disease", "label": "Pulmonary Vascular Disease", "shape": "dot", "title": "ObjectNode: Pulmonary Vascular Disease"},
+  {"id": "SHAQ-DI", "label": "SHAQ-DI", "shape": "dot", "title": "ObjectNode: SHAQ-DI"},
+  {"id": "ACR CRISS composite score", "label": "ACR CRISS composite score", "shape": "dot", "title": "ObjectNode: ACR CRISS composite score"},
+  {"id": "NCT01603459", "label": "NCT01603459", "shape": "dot", "title": "SubjectNode: NCT01603459"},
+  {"id": "Onabotulinumtoxin A", "label": "Onabotulinumtoxin A", "shape": "dot", "title": "ObjectNode: Onabotulinumtoxin A"},
+  {"id": "Ashworth Score", "label": "Ashworth Score", "shape": "dot", "title": "ObjectNode: Ashworth Score"},
+  {"id": "Post-Stroke Upper Limb Spasticity", "label": "Post-Stroke Upper Limb Spasticity", "shape": "dot", "title": "ObjectNode: Post-Stroke Upper Limb Spasticity"},
+  {"id": "Investigator's Global Assessment of Efficacy", "label": "Investigator's Global Assessment of Efficacy", "shape": "dot", "title": "ObjectNode: Investigator's Global Assessment of Efficacy"},
+  {"id": "Injection Cycle", "label": "Injection Cycle", "shape": "dot", "title": "ObjectNode: Injection Cycle"},
+  {"id": "NCT00614575", "label": "NCT00614575", "shape": "dot", "title": "SubjectNode: NCT00614575"},
+  {"id": "Modified Barthel Index", "label": "Modified Barthel Index", "shape": "dot", "title": "ObjectNode: Modified Barthel Index"},
+  {"id": "UPDRS Part I Item 3 Score", "label": "UPDRS Part I Item 3 Score", "shape": "dot", "title": "ObjectNode: UPDRS Part I Item 3 Score"},
+  {"id": "depressed episode", "label": "depressed episode", "shape": "dot", "title": "ObjectNode: depressed episode"},
+  {"id": "UPDRS Items 32 and 33 Composite Score", "label": "UPDRS Items 32 and 33 Composite Score", "shape": "dot", "title": "ObjectNode: UPDRS Items 32 and 33 Composite Score"},
+  {"id": "Bech Melancholia Subscale Score", "label": "Bech Melancholia Subscale Score", "shape": "dot", "title": "ObjectNode: Bech Melancholia Subscale Score"},
+  {"id": "Pramipexole Extended Release", "label": "Pramipexole Extended Release", "shape": "dot", "title": "ObjectNode: Pramipexole Extended Release"},
+  {"id": "NCT02400775", "label": "NCT02400775", "shape": "dot", "title": "SubjectNode: NCT02400775"},
+  {"id": "Office BP measurements", "label": "Office BP measurements", "shape": "dot", "title": "ObjectNode: Office BP measurements"},
+  {"id": "High LDL-C", "label": "High LDL-C", "shape": "dot", "title": "ObjectNode: High LDL-C"},
+  {"id": "Change in lipid-regulating protein levels", "label": "Change in lipid-regulating protein levels", "shape": "dot", "title": "ObjectNode: Change in lipid-regulating protein levels"},
+  {"id": "Change in calcified component", "label": "Change in calcified component", "shape": "dot", "title": "ObjectNode: Change in calcified component"},
+  {"id": "Change in number of microchannels", "label": "Change in number of microchannels", "shape": "dot", "title": "ObjectNode: Change in number of microchannels"},
+  {"id": "Stage II essential hypertension", "label": "Stage II essential hypertension", "shape": "dot", "title": "ObjectNode: Stage II essential hypertension"},
+  {"id": "Change in thickness of fibrous cap", "label": "Change in thickness of fibrous cap", "shape": "dot", "title": "ObjectNode: Change in thickness of fibrous cap"},
+  {"id": "No recent unstable angina", "label": "No recent unstable angina", "shape": "dot", "title": "ObjectNode: No recent unstable angina"},
+  {"id": "NCT02698475", "label": "NCT02698475", "shape": "dot", "title": "SubjectNode: NCT02698475"},
+  {"id": "C-DLQI Score", "label": "C-DLQI Score", "shape": "dot", "title": "ObjectNode: C-DLQI Score"},
+  {"id": "Failed standard treatment", "label": "Failed standard treatment", "shape": "dot", "title": "ObjectNode: Failed standard treatment"},
+  {"id": "PGA score clear/almost clear", "label": "PGA score clear/almost clear", "shape": "dot", "title": "ObjectNode: PGA score clear/almost clear"},
+  {"id": "NCT01351675", "label": "NCT01351675", "shape": "dot", "title": "SubjectNode: NCT01351675"},
+  {"id": "Time-to-first event", "label": "Time-to-first event", "shape": "dot", "title": "ObjectNode: Time-to-first event"},
+  {"id": "Bardoxolone Methyl", "label": "Bardoxolone Methyl", "shape": "dot", "title": "ObjectNode: Bardoxolone Methyl"},
+  {"id": "Mean change in Systolic BP", "label": "Mean change in Systolic BP", "shape": "dot", "title": "ObjectNode: Mean change in Systolic BP"},
+  {"id": "Time to First Relapse Event", "label": "Time to First Relapse Event", "shape": "dot", "title": "ObjectNode: Time to First Relapse Event"},
+  {"id": "Treatment with an ACE inhibitor and/or an ARB", "label": "Treatment with an ACE inhibitor and/or an ARB", "shape": "dot", "title": "ObjectNode: Treatment with an ACE inhibitor and/or an ARB"},
+  {"id": "Stable Dose Period", "label": "Stable Dose Period", "shape": "dot", "title": "ObjectNode: Stable Dose Period"}
+]
+
+    ];
+
+    const sampleEdges = [
+    {"arrows": "to", "from": "NCT03821493", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Advanced Solid Malignancies"}, {"arrows": "to", "from": "NCT03821493", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Hepatitis B e Antigen Seroconversion"}, {"arrows": "to", "from": "NCT03821493", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "hypersensitivity itraconazole"}, {"arrows": "to", "from": "NCT03821493", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "diagnosed chronic heart failure"}, {"arrows": "to", "from": "NCT03821493", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Body weight \u2265 45 kg"}, {"arrows": "to", "from": "NCT03821493", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "BMI 18 to 32 kg/m2"}, {"arrows": "to", "from": "NCT03821493", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Maximum Observed Plasma Analyte Concentration"}, {"arrows": "to", "from": "NCT03821493", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "AUCinf of PF-06835919"}, {"arrows": "to", "from": "NCT03821493", "label": "EVALUATES", "title": "EVALUATES", "to": "Isavuconazole"}, {"arrows": "to", "from": "NCT03821493", "label": "INVOLVES", "title": "INVOLVES", "to": "Healthy Fed Participants"}, {"arrows": "to", "from": "NCT04544293", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline to Week 49"}, {"arrows": "to", "from": "NCT04544293", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline to 28 days"}, {"arrows": "to", "from": "NCT04544293", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "SGRQ Activity component score"}, {"arrows": "to", "from": "NCT04544293", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "St. George\u0027s Hospital Respiratory Questionnaire"}, {"arrows": "to", "from": "NCT04544293", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change from baseline in Peak FEV1 response"}, {"arrows": "to", "from": "NCT04544293", "label": "EVALUATES", "title": "EVALUATES", "to": "Inhaled Molgramostim Nebulizer Solution"}, {"arrows": "to", "from": "NCT04544293", "label": "INVOLVES", "title": "INVOLVES", "to": "Idiopathic Pulmonary Fibrosis"}, {"arrows": "to", "from": "NCT03181893", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline to Week 49"}, {"arrows": "to", "from": "NCT03181893", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Treatment-Emergent SAEs"}, {"arrows": "to", "from": "NCT03181893", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "CDASI score change"}, {"arrows": "to", "from": "NCT03181893", "label": "EVALUATES", "title": "EVALUATES", "to": "Intravenous Sabirnetug"}, {"arrows": "to", "from": "NCT03181893", "label": "INVOLVES", "title": "INVOLVES", "to": "Cutaneous Dermatomyositis Disease Area and Severity Index Activity Score"}, {"arrows": "to", "from": "NCT01328093", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline condition"}, {"arrows": "to", "from": "NCT01328093", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Simpson Angus Rating Scale"}, {"arrows": "to", "from": "NCT01328093", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Barnes Akathisia Rating Scale"}, {"arrows": "to", "from": "NCT01328093", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change in weight control"}, {"arrows": "to", "from": "NCT01328093", "label": "EVALUATES", "title": "EVALUATES", "to": "Iloperidone"}, {"arrows": "to", "from": "NCT01328093", "label": "EVALUATES", "title": "EVALUATES", "to": "LY2624803"}, {"arrows": "to", "from": "NCT01328093", "label": "INVOLVES", "title": "INVOLVES", "to": "Early-Episode Schizophrenia"}, {"arrows": "to", "from": "NCT04732793", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "WOMAC A"}, {"arrows": "to", "from": "NCT04732793", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "baseline through 16 weeks"}, {"arrows": "to", "from": "NCT04732793", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "WOMAC B Stiffness"}, {"arrows": "to", "from": "NCT04732793", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "WOMAC A subscale"}, {"arrows": "to", "from": "NCT04732793", "label": "EVALUATES", "title": "EVALUATES", "to": "Hyruan ONE"}, {"arrows": "to", "from": "NCT04732793", "label": "INVOLVES", "title": "INVOLVES", "to": "Osteoarthritis-related Pain"}, {"arrows": "to", "from": "NCT02240693", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change From Baseline-2"}, {"arrows": "to", "from": "NCT02240693", "label": "INVOLVES", "title": "INVOLVES", "to": "Early Symptomatic Alzheimer\u0027s Disease"}, {"arrows": "to", "from": "NCT02240693", "label": "EVALUATES", "title": "EVALUATES", "to": "BI 456906"}, {"arrows": "to", "from": "NCT02240693", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "self care and daily function"}, {"arrows": "to", "from": "NCT02240693", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "ADCS-ADL scale"}, {"arrows": "to", "from": "NCT06456593", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "SES-CD ulcer subscore \u003e 1"}, {"arrows": "to", "from": "NCT06456593", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "endoscopic treatment improvement"}, {"arrows": "to", "from": "NCT06456593", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Clinically Significant Remission"}, {"arrows": "to", "from": "NCT06456593", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "CDAI-Defined Clinical Response"}, {"arrows": "to", "from": "NCT06456593", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "CDASI score change"}, {"arrows": "to", "from": "NCT06456593", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Weeks 12"}, {"arrows": "to", "from": "NCT06456593", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Week 60"}, {"arrows": "to", "from": "NCT06456593", "label": "EVALUATES", "title": "EVALUATES", "to": "Obefazimod"}, {"arrows": "to", "from": "NCT06456593", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "PRO-2 Remission"}, {"arrows": "to", "from": "NCT06456593", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Mayo IBD symptom severity score"}, {"arrows": "to", "from": "NCT06456593", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Simple Endoscopic Score for Crohn\u0027s disease (SES-CD)"}, {"arrows": "to", "from": "NCT06456593", "label": "INVOLVES", "title": "INVOLVES", "to": "Immune-related Colitis"}, {"arrows": "to", "from": "NCT05590793", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in electrocardiograms"}, {"arrows": "to", "from": "NCT05590793", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Serum Testosterone Levels"}, {"arrows": "to", "from": "NCT05590793", "label": "EVALUATES", "title": "EVALUATES", "to": "Triptorelin Pamoate PR 3-month"}, {"arrows": "to", "from": "NCT05590793", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Chinese Adult Subjects"}, {"arrows": "to", "from": "NCT05590793", "label": "INVOLVES", "title": "INVOLVES", "to": "Advanced Prostate Cancer"}, {"arrows": "to", "from": "NCT05590793", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "physical examination results"}, {"arrows": "to", "from": "NCT05590793", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Prostate-Specific Antigen Levels"}, {"arrows": "to", "from": "NCT05590793", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Clinically significant abnormalities in vital signs"}, {"arrows": "to", "from": "NCT05590793", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Screening laboratory parameters"}, {"arrows": "to", "from": "NCT05590793", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Treatment-Emergent SAEs"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Overall platelet response"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "RBC"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "IGA cleared or minimal"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Urea Nitrogen"}, {"arrows": "to", "from": "NCT05732454", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "oral medications"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Mean Change Total Bilirubin"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "mean corpuscular hemoglobin"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "TBNK panel"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "WBC"}, {"arrows": "to", "from": "NCT05732454", "label": "INVOLVES", "title": "INVOLVES", "to": "Children with atopic dermatitis"}, {"arrows": "to", "from": "NCT05732454", "label": "EVALUATES", "title": "EVALUATES", "to": "Oral Etrasimod"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Serum creatinine \u22643 mg/dL"}, {"arrows": "to", "from": "NCT05732454", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Hematocrit change"}, {"arrows": "to", "from": "NCT02220933", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "EDSS or TW25"}, {"arrows": "to", "from": "NCT02220933", "label": "INVOLVES", "title": "INVOLVES", "to": "Disease duration of secondary progressive multiple sclerosis"}, {"arrows": "to", "from": "NCT02220933", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "MSWS"}, {"arrows": "to", "from": "NCT02220933", "label": "EVALUATES", "title": "EVALUATES", "to": "MD1003"}, {"arrows": "to", "from": "NCT02220933", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "decreased EDSS"}, {"arrows": "to", "from": "NCT03836287", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Hyperhidrosis severity 3 or 4"}, {"arrows": "to", "from": "NCT03836287", "label": "EVALUATES", "title": "EVALUATES", "to": "Sofpironium Bromide Gel"}, {"arrows": "to", "from": "NCT03836287", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Gravimetrically Measured Sweat Production"}, {"arrows": "to", "from": "NCT03836287", "label": "INVOLVES", "title": "INVOLVES", "to": "Primary Axillary Hyperhidrosis"}, {"arrows": "to", "from": "NCT03836287", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Up to 32 weeks"}, {"arrows": "to", "from": "NCT03068754", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Clinically Significant Response"}, {"arrows": "to", "from": "NCT03068754", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Lung function parameters"}, {"arrows": "to", "from": "NCT03068754", "label": "EVALUATES", "title": "EVALUATES", "to": "Acthar Gel"}, {"arrows": "to", "from": "NCT03068754", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Rasch Overall ALS Disability Scale"}, {"arrows": "to", "from": "NCT03068754", "label": "INVOLVES", "title": "INVOLVES", "to": "ALS or MS"}, {"arrows": "to", "from": "NCT06272487", "label": "INVOLVES", "title": "INVOLVES", "to": "Diagnosis of severe hypertension"}, {"arrows": "to", "from": "NCT06272487", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change From Baseline-2"}, {"arrows": "to", "from": "NCT06272487", "label": "EVALUATES", "title": "EVALUATES", "to": "Zilebesiran"}, {"arrows": "to", "from": "NCT06272487", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Standard of Care"}, {"arrows": "to", "from": "NCT06272487", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Percent Change from Baseline in Serum Angiotensinogen"}, {"arrows": "to", "from": "NCT02438787", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "ASAS20 treatment response"}, {"arrows": "to", "from": "NCT02438787", "label": "INVOLVES", "title": "INVOLVES", "to": "Prior Anti-TNF Therapy"}, {"arrows": "to", "from": "NCT02438787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Early Spondyloarthritis"}, {"arrows": "to", "from": "NCT02438787", "label": "EVALUATES", "title": "EVALUATES", "to": "Abrilumab"}, {"arrows": "to", "from": "NCT02438787", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "ASAS40 treatment response"}, {"arrows": "to", "from": "NCT04053387", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Median Time to Improvement"}, {"arrows": "to", "from": "NCT04053387", "label": "INVOLVES", "title": "INVOLVES", "to": "at least one psoriatic plaque"}, {"arrows": "to", "from": "NCT04053387", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "sPGA (0)"}, {"arrows": "to", "from": "NCT04053387", "label": "EVALUATES", "title": "EVALUATES", "to": "VTAMA (Tapinarof) Cream"}, {"arrows": "to", "from": "NCT04053387", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Potentially Clinically Important Changes"}, {"arrows": "to", "from": "NCT05002933", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Adults \u003e=12 years old"}, {"arrows": "to", "from": "NCT05002933", "label": "INVOLVES", "title": "INVOLVES", "to": "Overweight and Obese Subjects With Type 2 Diabetes"}, {"arrows": "to", "from": "NCT05002933", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Percentage of Participants Achieving a Therapeutic Glycemic Response"}, {"arrows": "to", "from": "NCT05002933", "label": "EVALUATES", "title": "EVALUATES", "to": "Insulin Glargine/Lixisenatide Fixed Ratio Combination"}, {"arrows": "to", "from": "NCT05002933", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Adjusted Mean Change HbA1c"}, {"arrows": "to", "from": "NCT05426733", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change mid-arm circumference"}, {"arrows": "to", "from": "NCT05426733", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change serum bile acids"}, {"arrows": "to", "from": "NCT05426733", "label": "INVOLVES", "title": "INVOLVES", "to": "Primary Biliary Cholangitis"}, {"arrows": "to", "from": "NCT05426733", "label": "EVALUATES", "title": "EVALUATES", "to": "Odevixibat"}, {"arrows": "to", "from": "NCT05426733", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in Fibrosis-4 (FIB-4) Score"}, {"arrows": "to", "from": "NCT05426733", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change pediatric end-stage liver disease score"}, {"arrows": "to", "from": "NCT05426733", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change AST to platelet ratio index"}, {"arrows": "to", "from": "NCT05426733", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Proportion alive"}, {"arrows": "to", "from": "NCT05426733", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in weight control"}, {"arrows": "to", "from": "NCT05426733", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Completion of 104-week Treatment Period"}, {"arrows": "to", "from": "NCT05426733", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Patient\u0027s written informed consent"}, {"arrows": "to", "from": "NCT05426733", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change height"}, {"arrows": "to", "from": "NCT05426733", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Time to onset sentinel events"}, {"arrows": "to", "from": "NCT04437433", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Columbia Suicide Severity Rating Scale"}, {"arrows": "to", "from": "NCT04437433", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Treatment-Emergent SAEs"}, {"arrows": "to", "from": "NCT04437433", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Number of patients with clinically significant changes in vital signs"}, {"arrows": "to", "from": "NCT04437433", "label": "INVOLVES", "title": "INVOLVES", "to": "Migraine Headaches"}, {"arrows": "to", "from": "NCT04437433", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Clinically significant abnormalities in clinical laboratory values"}, {"arrows": "to", "from": "NCT04437433", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Completed all visits"}, {"arrows": "to", "from": "NCT04437433", "label": "EVALUATES", "title": "EVALUATES", "to": "Oral Atogepant"}, {"arrows": "to", "from": "NCT04437433", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Clinically significant abnormalities in ECG"}, {"arrows": "to", "from": "NCT04479787", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Responder Rate PGIC"}, {"arrows": "to", "from": "NCT04479787", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "NRS mean change"}, {"arrows": "to", "from": "NCT04479787", "label": "INVOLVES", "title": "INVOLVES", "to": "Change in Back Pain"}, {"arrows": "to", "from": "NCT04479787", "label": "EVALUATES", "title": "EVALUATES", "to": "10 kHz Spinal Cord Stimulation"}, {"arrows": "to", "from": "NCT04479787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "\u2265 30% decrease from baseline"}, {"arrows": "to", "from": "NCT04479787", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in OSDI"}, {"arrows": "to", "from": "NCT04479787", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Study Composite Responder"}, {"arrows": "to", "from": "NCT04479787", "label": "EVALUATES", "title": "EVALUATES", "to": "Medical Management"}, {"arrows": "to", "from": "NCT00327587", "label": "EVALUATES", "title": "EVALUATES", "to": "Olmesartan and Amlodipine"}, {"arrows": "to", "from": "NCT00327587", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Systolic BP control"}, {"arrows": "to", "from": "NCT00327587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Diastolic BP \u226590 mmHg"}, {"arrows": "to", "from": "NCT00327587", "label": "INVOLVES", "title": "INVOLVES", "to": "Diagnosis of severe hypertension"}, {"arrows": "to", "from": "NCT00327587", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Normalized blood pressure"}, {"arrows": "to", "from": "NCT00327587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Systolic BP \u2265140 mmHg"}, {"arrows": "to", "from": "NCT00327587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Diastolic BP \u226580 mmHg"}, {"arrows": "to", "from": "NCT00327587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Arm circumference \u003e 42 cm"}, {"arrows": "to", "from": "NCT00327587", "label": "EVALUATES", "title": "EVALUATES", "to": "Amlodipine Besylate/Benazepril"}, {"arrows": "to", "from": "NCT00327587", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Diastolic blood pressure \u003c 60 mm Hg"}, {"arrows": "to", "from": "NCT00327587", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Diastolic blood pressure \u003c 60 mm Hg"}, {"arrows": "to", "from": "NCT00327587", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Systolic BP control"}, {"arrows": "to", "from": "NCT00327587", "label": "EVALUATES", "title": "EVALUATES", "to": "HCTZ 25 mg"}, {"arrows": "to", "from": "NCT02618187", "label": "INVOLVES", "title": "INVOLVES", "to": "Duration of Ulcerative Colitis"}, {"arrows": "to", "from": "NCT02618187", "label": "EVALUATES", "title": "EVALUATES", "to": "SER-214"}, {"arrows": "to", "from": "NCT02618187", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Microbiota composition analysis"}, {"arrows": "to", "from": "NCT02618187", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Participants in Remission"}, {"arrows": "to", "from": "NCT02618187", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "9-point modified Mayo score"}, {"arrows": "to", "from": "NCT01429987", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "stool frequency evaluation"}, {"arrows": "to", "from": "NCT01429987", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "18 to 55 years old"}, {"arrows": "to", "from": "NCT01429987", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "BMI 18 to 32 kg/m2"}, {"arrows": "to", "from": "NCT01429987", "label": "EVALUATES", "title": "EVALUATES", "to": "Plecanatide"}, {"arrows": "to", "from": "NCT01429987", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "12-week CSBM Frequency"}, {"arrows": "to", "from": "NCT01429987", "label": "INVOLVES", "title": "INVOLVES", "to": "IBS-Constipation"}, {"arrows": "to", "from": "NCT01429987", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Straining Score"}, {"arrows": "to", "from": "NCT01429987", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "ROME IV criteria"}, {"arrows": "to", "from": "NCT04158687", "label": "EVALUATES", "title": "EVALUATES", "to": "CP-601"}, {"arrows": "to", "from": "NCT04158687", "label": "INVOLVES", "title": "INVOLVES", "to": "Early-Episode Schizophrenia"}, {"arrows": "to", "from": "NCT04158687", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Adults \u003e=12 years old"}, {"arrows": "to", "from": "NCT04158687", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Total Personal and Social Performance"}, {"arrows": "to", "from": "NCT04158687", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "CGI-Severity Score"}, {"arrows": "to", "from": "NCT04158687", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change From Baseline-2"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "regular alcohol consumption"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "clinically significant changes in Electrocardiogram readings"}, {"arrows": "to", "from": "NCT01862887", "label": "EVALUATES", "title": "EVALUATES", "to": "PF-07038124"}, {"arrows": "to", "from": "NCT01862887", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Fmax"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Healthy adult male subjects"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Healthy male or female"}, {"arrows": "to", "from": "NCT01862887", "label": "INVOLVES", "title": "INVOLVES", "to": "QTcB change"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "clinically significant respiratory"}, {"arrows": "to", "from": "NCT01862887", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Time for Cmax"}, {"arrows": "to", "from": "NCT01862887", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "QTcB change"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "clinically significant allergic disease"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "severe renal involvement at Screening"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Total Fat Mass"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "endocrine abnormalities"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "psychiatric disease"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Mean change in BMI"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "hepatic dysfunction"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "neurological disorder"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "positive urine drug screen"}, {"arrows": "to", "from": "NCT01862887", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "AUC from time zero"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Clinically significant haematology assessment abnormalities"}, {"arrows": "to", "from": "NCT01862887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "gastrointestinal abnormalities"}, {"arrows": "to", "from": "NCT00397033", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "PANSS General Psychopathology Subscale"}, {"arrows": "to", "from": "NCT00397033", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "PANSS General Psychopathology Subscale"}, {"arrows": "to", "from": "NCT00397033", "label": "INVOLVES", "title": "INVOLVES", "to": "psychiatric disease"}, {"arrows": "to", "from": "NCT00397033", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Greater Than 50% Reduction"}, {"arrows": "to", "from": "NCT00397033", "label": "EVALUATES", "title": "EVALUATES", "to": "Oral Paliperidone Extended-Release"}, {"arrows": "to", "from": "NCT04172233", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "mPASI-90"}, {"arrows": "to", "from": "NCT04172233", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "PASI \u2265 12 points"}, {"arrows": "to", "from": "NCT04172233", "label": "EVALUATES", "title": "EVALUATES", "to": "AKST1210"}, {"arrows": "to", "from": "NCT04172233", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in Physician\u0027s Global Assessment"}, {"arrows": "to", "from": "NCT04172233", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "mPASI-75"}, {"arrows": "to", "from": "NCT04172233", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "10% body surface areas"}, {"arrows": "to", "from": "NCT04172233", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Physician\u0027s global assessment scores"}, {"arrows": "to", "from": "NCT04172233", "label": "INVOLVES", "title": "INVOLVES", "to": "at least one psoriatic plaque"}, {"arrows": "to", "from": "NCT05522387", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change From Baseline-2"}, {"arrows": "to", "from": "NCT05522387", "label": "INVOLVES", "title": "INVOLVES", "to": "Early Symptomatic Alzheimer\u0027s Disease"}, {"arrows": "to", "from": "NCT05522387", "label": "EVALUATES", "title": "EVALUATES", "to": "XPro1595"}, {"arrows": "to", "from": "NCT05522387", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Clinical Dementia Rating-Sum of Boxes"}, {"arrows": "to", "from": "NCT05522387", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "predefined criteria"}, {"arrows": "to", "from": "NCT00848354", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "ACR20 Responders"}, {"arrows": "to", "from": "NCT00848354", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "HAI Score"}, {"arrows": "to", "from": "NCT00848354", "label": "EVALUATES", "title": "EVALUATES", "to": "Etokimab"}, {"arrows": "to", "from": "NCT00848354", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "SF36 Score"}, {"arrows": "to", "from": "NCT00848354", "label": "INVOLVES", "title": "INVOLVES", "to": "arthritis pain"}, {"arrows": "to", "from": "NCT00848354", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline to 28 days"}, {"arrows": "to", "from": "NCT02674633", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "ADHD-RS-IV Scores"}, {"arrows": "to", "from": "NCT02674633", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "TOVA API"}, {"arrows": "to", "from": "NCT02674633", "label": "EVALUATES", "title": "EVALUATES", "to": "Software"}, {"arrows": "to", "from": "NCT02674633", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "DSM-5 diagnostic criteria"}, {"arrows": "to", "from": "NCT02674633", "label": "INVOLVES", "title": "INVOLVES", "to": "ADHD-RS change"}, {"arrows": "to", "from": "NCT00886587", "label": "EVALUATES", "title": "EVALUATES", "to": "device intervention"}, {"arrows": "to", "from": "NCT00886587", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "EASI score at Week 48"}, {"arrows": "to", "from": "NCT00886587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Able to provide informed consent"}, {"arrows": "to", "from": "NCT00886587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Diagnosis of AD/ADRD"}, {"arrows": "to", "from": "NCT00886587", "label": "INVOLVES", "title": "INVOLVES", "to": "Children with atopic dermatitis"}, {"arrows": "to", "from": "NCT00886587", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Itch Score Day 43"}, {"arrows": "to", "from": "NCT00886587", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "IGADA Score Day 43"}, {"arrows": "to", "from": "NCT00886587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Post-menarchal female"}, {"arrows": "to", "from": "NCT00886587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "negative urine pregnancy test result"}, {"arrows": "to", "from": "NCT05054387", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "eGFR \u003e 60 ml/min/1.73 m2"}, {"arrows": "to", "from": "NCT05054387", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "12 years or older"}, {"arrows": "to", "from": "NCT05054387", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "plasma or leukocyte \u03b1GAL activity deficient"}, {"arrows": "to", "from": "NCT05054387", "label": "EVALUATES", "title": "EVALUATES", "to": "Fabrazyme"}, {"arrows": "to", "from": "NCT05054387", "label": "INVOLVES", "title": "INVOLVES", "to": "diagnosed with Fabry disease"}, {"arrows": "to", "from": "NCT05054387", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "change of Fabry disease symptoms"}, {"arrows": "to", "from": "NCT05054387", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "diagnosed with Fabry disease"}, {"arrows": "to", "from": "NCT05054387", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "naive to agalsidase beta"}, {"arrows": "to", "from": "NCT04360187", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Treatment-Emergent SAEs"}, {"arrows": "to", "from": "NCT04360187", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Serious AEs"}, {"arrows": "to", "from": "NCT04360187", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "ages 2 years and older"}, {"arrows": "to", "from": "NCT04360187", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Eczema Area and Severity Index (EASI) of \u226512 and \\\u003c48"}, {"arrows": "to", "from": "NCT04360187", "label": "EVALUATES", "title": "EVALUATES", "to": "Crisaborole"}, {"arrows": "to", "from": "NCT04360187", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Clinically Significant Response"}, {"arrows": "to", "from": "NCT04360187", "label": "INVOLVES", "title": "INVOLVES", "to": "Children with atopic dermatitis"}, {"arrows": "to", "from": "NCT00678587", "label": "INVOLVES", "title": "INVOLVES", "to": "Thrombocytopenia"}, {"arrows": "to", "from": "NCT00678587", "label": "INVOLVES", "title": "INVOLVES", "to": "Hepatobiliary fibrosis"}, {"arrows": "to", "from": "NCT00678587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "platelet count \u2265 100"}, {"arrows": "to", "from": "NCT00678587", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in bleeding score"}, {"arrows": "to", "from": "NCT00678587", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Platelet transfusion independence"}, {"arrows": "to", "from": "NCT00678587", "label": "EVALUATES", "title": "EVALUATES", "to": "Switched to eltrombopag or romiplostim"}, {"arrows": "to", "from": "NCT01098487", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Collagen Level"}, {"arrows": "to", "from": "NCT01098487", "label": "EVALUATES", "title": "EVALUATES", "to": "Switched to eltrombopag or romiplostim"}, {"arrows": "to", "from": "NCT01098487", "label": "INVOLVES", "title": "INVOLVES", "to": "Chronic Immune Thrombocytopenic Purpura"}, {"arrows": "to", "from": "NCT01098487", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "MF Grade change"}, {"arrows": "to", "from": "NCT01098487", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "centrally-reviewed BM biopsy"}, {"arrows": "to", "from": "NCT03772587", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Day 1 up to 393"}, {"arrows": "to", "from": "NCT03772587", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Number of Participants Reporting TEAEs"}, {"arrows": "to", "from": "NCT03772587", "label": "INVOLVES", "title": "INVOLVES", "to": "Lambert Eaton Myasthenic Syndrome"}, {"arrows": "to", "from": "NCT03772587", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Number of SAEs"}, {"arrows": "to", "from": "NCT03772587", "label": "EVALUATES", "title": "EVALUATES", "to": "M2951"}, {"arrows": "to", "from": "NCT03772587", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Number of participants with AESI"}, {"arrows": "to", "from": "NCT00876187", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Daily LBPI Score"}, {"arrows": "to", "from": "NCT00876187", "label": "INVOLVES", "title": "INVOLVES", "to": "Chronic Low-Back Pain"}, {"arrows": "to", "from": "NCT00876187", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline Observation Carried Forward"}, {"arrows": "to", "from": "NCT00876187", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Patient Global Improvement"}, {"arrows": "to", "from": "NCT00876187", "label": "EVALUATES", "title": "EVALUATES", "to": "Subcutaneous Tanezumab"}, {"arrows": "to", "from": "NCT00876187", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "QMG Total Score"}, {"arrows": "to", "from": "NCT00660387", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change From Baseline-2"}, {"arrows": "to", "from": "NCT00660387", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Levodopa/Carbidopa/Entacapone"}, {"arrows": "to", "from": "NCT00660387", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Average Daily Normalized \"Off\" Time"}, {"arrows": "to", "from": "NCT00660387", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Average Daily Normalized \"On\" Time"}, {"arrows": "to", "from": "NCT00660387", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change From Baseline-2"}, {"arrows": "to", "from": "NCT00660387", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change From Baseline in Parkinson\u0027s Disease Questionnaire-39 Summary Index Score"}, {"arrows": "to", "from": "NCT00660387", "label": "INVOLVES", "title": "INVOLVES", "to": "early-stage Parkinson\u0027s disease"}, {"arrows": "to", "from": "NCT00660387", "label": "EVALUATES", "title": "EVALUATES", "to": "Levodopa/Carbidopa/Entacapone"}, {"arrows": "to", "from": "NCT01255787", "label": "INVOLVES", "title": "INVOLVES", "to": "Major Depressive Disorder With Mixed Features"}, {"arrows": "to", "from": "NCT01255787", "label": "EVALUATES", "title": "EVALUATES", "to": "Suvorexant"}, {"arrows": "to", "from": "NCT01255787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline value"}, {"arrows": "to", "from": "NCT01255787", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "CGI-C Scale Scores"}, {"arrows": "to", "from": "NCT01255787", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "MADRS Response Rate"}, {"arrows": "to", "from": "NCT01255787", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "MADRS total score \u226522"}, {"arrows": "to", "from": "NCT01255787", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "MADRS Remission at Week 8"}, {"arrows": "to", "from": "NCT00877487", "label": "EVALUATES", "title": "EVALUATES", "to": "Concerta"}, {"arrows": "to", "from": "NCT00877487", "label": "INVOLVES", "title": "INVOLVES", "to": "documented ADHD diagnosis"}, {"arrows": "to", "from": "NCT00877487", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Documented history of ADHD diagnosis"}, {"arrows": "to", "from": "NCT00877487", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "18 to 55 years old"}, {"arrows": "to", "from": "NCT00877487", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "CGI-C Scale Scores"}, {"arrows": "to", "from": "NCT00877487", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "negative urine pregnancy test result"}, {"arrows": "to", "from": "NCT00877487", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "ADHD-RS-IV Scores"}, {"arrows": "to", "from": "NCT00877487", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "CGI-C Scale Scores"}, {"arrows": "to", "from": "NCT00877487", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "ADHD-RS-IV Scores"}, {"arrows": "to", "from": "NCT00877487", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "stable SPD489 treatment 6 months"}, {"arrows": "to", "from": "NCT01524887", "label": "INVOLVES", "title": "INVOLVES", "to": "Early Symptomatic Alzheimer\u0027s Disease"}, {"arrows": "to", "from": "NCT01524887", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in ADCS-ADL"}, {"arrows": "to", "from": "NCT01524887", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "ADCS-ADL scale"}, {"arrows": "to", "from": "NCT01524887", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline to \u226420 weeks"}, {"arrows": "to", "from": "NCT01524887", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "ADAS-Cog-11 Scores"}, {"arrows": "to", "from": "NCT01524887", "label": "EVALUATES", "title": "EVALUATES", "to": "IGIV"}, {"arrows": "to", "from": "NCT01524887", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Neuropsychiatry Inventory"}, {"arrows": "to", "from": "NCT01617187", "label": "EVALUATES", "title": "EVALUATES", "to": "Pimavanserin"}, {"arrows": "to", "from": "NCT01617187", "label": "INVOLVES", "title": "INVOLVES", "to": "Early-Episode Schizophrenia"}, {"arrows": "to", "from": "NCT01617187", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "CGI-C Scale Scores"}, {"arrows": "to", "from": "NCT01617187", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "PANSS Responders"}, {"arrows": "to", "from": "NCT01617187", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change From Baseline-2"}, {"arrows": "to", "from": "NCT01617187", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline to 28 days"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "DSM-5 diagnostic criteria"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "CGI-Severity Score"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "no prior lurasidone trial"}, {"arrows": "to", "from": "NCT03465787", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "PANSS General Psychopathology Subscale"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "switched from other antipsychotic drugs"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "age 18 or above and below 65"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "no drug abuse"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "no chronic CNS disease"}, {"arrows": "to", "from": "NCT03465787", "label": "EVALUATES", "title": "EVALUATES", "to": "Iloperidone"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "no pregnancy or breastfeeding"}, {"arrows": "to", "from": "NCT03465787", "label": "INVOLVES", "title": "INVOLVES", "to": "Early-Episode Schizophrenia"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "reasonably good health"}, {"arrows": "to", "from": "NCT03465787", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "CGI-C Scale Scores"}, {"arrows": "to", "from": "NCT03465787", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "able to cooperate"}, {"arrows": "to", "from": "NCT05865496", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "UPSIT Score"}, {"arrows": "to", "from": "NCT05865496", "label": "EVALUATES", "title": "EVALUATES", "to": "611"}, {"arrows": "to", "from": "NCT05865496", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Nasal blockade/obstruction/congestion"}, {"arrows": "to", "from": "NCT05865496", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Lysholm Score"}, {"arrows": "to", "from": "NCT05865496", "label": "INVOLVES", "title": "INVOLVES", "to": "Nasal polyp score \u2265 4"}, {"arrows": "to", "from": "NCT05865496", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Up to 48 weeks"}, {"arrows": "to", "from": "NCT05865496", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Nasal polyp score \u2265 4"}, {"arrows": "to", "from": "NCT05865496", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Bilateral NPS"}, {"arrows": "to", "from": "NCT03909516", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Average Evening Pain Intensity"}, {"arrows": "to", "from": "NCT03909516", "label": "EVALUATES", "title": "EVALUATES", "to": "Iovera\u00b0 Device"}, {"arrows": "to", "from": "NCT03909516", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Single Assessment Numerical Evaluation"}, {"arrows": "to", "from": "NCT03909516", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline to 28 days"}, {"arrows": "to", "from": "NCT03909516", "label": "INVOLVES", "title": "INVOLVES", "to": "Lateral Ankle Ligament Reconstruction"}, {"arrows": "to", "from": "NCT03909516", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Area-Under-Effect"}, {"arrows": "to", "from": "NCT03909516", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline to 10 days post-surgery"}, {"arrows": "to", "from": "NCT03909516", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Oxford Knee Score"}, {"arrows": "to", "from": "NCT03836716", "label": "INVOLVES", "title": "INVOLVES", "to": "ALS or MS"}, {"arrows": "to", "from": "NCT03836716", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Hematology Screening parameters"}, {"arrows": "to", "from": "NCT03836716", "label": "EVALUATES", "title": "EVALUATES", "to": "Aramchol Meglumine"}, {"arrows": "to", "from": "NCT03836716", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Mean Change EASI"}, {"arrows": "to", "from": "NCT03836716", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "IMP dose"}, {"arrows": "to", "from": "NCT02111096", "label": "INVOLVES", "title": "INVOLVES", "to": "Overweight and Obese Subjects With Type 2 Diabetes"}, {"arrows": "to", "from": "NCT02111096", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Fasting and Post meal Glucose"}, {"arrows": "to", "from": "NCT02111096", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "ALT and AST elevation"}, {"arrows": "to", "from": "NCT02111096", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "hepatic fat fraction \u2265 5%"}, {"arrows": "to", "from": "NCT02111096", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Fasting Triglyceride Levels"}, {"arrows": "to", "from": "NCT02111096", "label": "EVALUATES", "title": "EVALUATES", "to": "LY2624803"}, {"arrows": "to", "from": "NCT02111096", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Baseline Weight"}, {"arrows": "to", "from": "NCT02111096", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Hemoglobin A1c Levels"}, {"arrows": "to", "from": "NCT02046616", "label": "INVOLVES", "title": "INVOLVES", "to": "arthritis pain"}, {"arrows": "to", "from": "NCT02046616", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change from Baseline in DAS28-CRP"}, {"arrows": "to", "from": "NCT02046616", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "methotrexate-inadequate responders"}, {"arrows": "to", "from": "NCT02046616", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Percentage of Participants Achieving Pediatric American College of Rheumatology Pediatric 30% Response"}, {"arrows": "to", "from": "NCT02046616", "label": "EVALUATES", "title": "EVALUATES", "to": "Tocilizumab Subcutaneous"}, {"arrows": "to", "from": "NCT01647516", "label": "INVOLVES", "title": "INVOLVES", "to": "Duration of Ulcerative Colitis"}, {"arrows": "to", "from": "NCT01647516", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "9-point modified Mayo score"}, {"arrows": "to", "from": "NCT01647516", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Participants in Remission"}, {"arrows": "to", "from": "NCT01647516", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Clinical Response 100"}, {"arrows": "to", "from": "NCT01647516", "label": "EVALUATES", "title": "EVALUATES", "to": "Ozarelix"}, {"arrows": "to", "from": "NCT01058096", "label": "EVALUATES", "title": "EVALUATES", "to": "Aripiprazole Lauroxil"}, {"arrows": "to", "from": "NCT01058096", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Able to provide informed consent"}, {"arrows": "to", "from": "NCT01058096", "label": "INVOLVES", "title": "INVOLVES", "to": "Adults With Bipolar I Disorder"}, {"arrows": "to", "from": "NCT01058096", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "YMRS score"}, {"arrows": "to", "from": "NCT01058096", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "CGI-Improvement Score"}, {"arrows": "to", "from": "NCT02317016", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "AUC of Rosuvastatin"}, {"arrows": "to", "from": "NCT02317016", "label": "EVALUATES", "title": "EVALUATES", "to": "AZD9668"}, {"arrows": "to", "from": "NCT02317016", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "tmax of rosuvastatin"}, {"arrows": "to", "from": "NCT02317016", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Maximally Tolerated Statin"}, {"arrows": "to", "from": "NCT02317016", "label": "INVOLVES", "title": "INVOLVES", "to": "Metastatic Non-squamous Non-Small-Cell Lung Cancer"}, {"arrows": "to", "from": "NCT04839016", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "inadequately controlled by topical treatment"}, {"arrows": "to", "from": "NCT04839016", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "PASI-75 Score"}, {"arrows": "to", "from": "NCT04839016", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "sPGA of Clear or Almost Clear at Week 16"}, {"arrows": "to", "from": "NCT04839016", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "disease inadequately controlled"}, {"arrows": "to", "from": "NCT04839016", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "12 years or older"}, {"arrows": "to", "from": "NCT04839016", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "BMI 18 to 32 kg/m2"}, {"arrows": "to", "from": "NCT04839016", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "inadequate topical response"}, {"arrows": "to", "from": "NCT04839016", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "BSA score \u2265 10%"}, {"arrows": "to", "from": "NCT04839016", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "PASI-75 at Week 24"}, {"arrows": "to", "from": "NCT04839016", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Mild to Severe Plaque Psoriasis"}, {"arrows": "to", "from": "NCT04839016", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "sPGA score \u2265 3 points"}, {"arrows": "to", "from": "NCT04839016", "label": "INVOLVES", "title": "INVOLVES", "to": "at least one psoriatic plaque"}, {"arrows": "to", "from": "NCT04839016", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "PASI-75 at Week 24"}, {"arrows": "to", "from": "NCT04839016", "label": "EVALUATES", "title": "EVALUATES", "to": "SHR0302"}, {"arrows": "to", "from": "NCT03971422", "label": "INVOLVES", "title": "INVOLVES", "to": "Lambert Eaton Myasthenic Syndrome"}, {"arrows": "to", "from": "NCT03971422", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change From Baseline-2"}, {"arrows": "to", "from": "NCT03971422", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline up to Day 21"}, {"arrows": "to", "from": "NCT03971422", "label": "EVALUATES", "title": "EVALUATES", "to": "Romosozumab"}, {"arrows": "to", "from": "NCT03971422", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Percentage of Participants Achieving MG-ADL Response"}, {"arrows": "to", "from": "NCT03845075", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Liver function parameters"}, {"arrows": "to", "from": "NCT03845075", "label": "EVALUATES", "title": "EVALUATES", "to": "Metoprolol Succinate Prolonged-Release Tablet"}, {"arrows": "to", "from": "NCT03845075", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Diastolic blood pressure \u003c 60 mm Hg"}, {"arrows": "to", "from": "NCT03845075", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Systolic BP control"}, {"arrows": "to", "from": "NCT03845075", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Treatment-Emergent SAEs"}, {"arrows": "to", "from": "NCT03845075", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Number of Participants With Any Treatment-Emergent Adverse Events"}, {"arrows": "to", "from": "NCT03845075", "label": "INVOLVES", "title": "INVOLVES", "to": "Acquired Hypothalamic Obesity"}, {"arrows": "to", "from": "NCT03845075", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change from Baseline in Average Heart Rate"}, {"arrows": "to", "from": "NCT03845075", "label": "EVALUATES", "title": "EVALUATES", "to": "Tesofensine"}, {"arrows": "to", "from": "NCT03845075", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Serious AEs"}, {"arrows": "to", "from": "NCT03845075", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Serum Creatinine Elevations"}, {"arrows": "to", "from": "NCT03845075", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Hematology Laboratory Results"}, {"arrows": "to", "from": "NCT04507659", "label": "INVOLVES", "title": "INVOLVES", "to": "Sacroiliitis"}, {"arrows": "to", "from": "NCT04507659", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "\u2265 20%"}, {"arrows": "to", "from": "NCT04507659", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "ASAS20 response at Week 12"}, {"arrows": "to", "from": "NCT04507659", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "ASAS20 response at Week 12"}, {"arrows": "to", "from": "NCT04507659", "label": "EVALUATES", "title": "EVALUATES", "to": "Jaktinib Hydrochloride Tablets"}, {"arrows": "to", "from": "NCT02868359", "label": "INVOLVES", "title": "INVOLVES", "to": "Chronic Low-Back Pain"}, {"arrows": "to", "from": "NCT02868359", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Pain scoring"}, {"arrows": "to", "from": "NCT02868359", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Pain Interference on Sleep"}, {"arrows": "to", "from": "NCT02868359", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Neck Disability Index Score"}, {"arrows": "to", "from": "NCT02868359", "label": "EVALUATES", "title": "EVALUATES", "to": "Lyrica"}, {"arrows": "to", "from": "NCT02868359", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "EuroQol 5 Dimensions 5 Levels"}, {"arrows": "to", "from": "NCT02868359", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Rescue medication consumption"}, {"arrows": "to", "from": "NCT01649375", "label": "EVALUATES", "title": "EVALUATES", "to": "securkinumab"}, {"arrows": "to", "from": "NCT01649375", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Baseline to 28 days"}, {"arrows": "to", "from": "NCT01649375", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "ASAS20 treatment response"}, {"arrows": "to", "from": "NCT01649375", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "high-sensitivity CRP"}, {"arrows": "to", "from": "NCT01649375", "label": "INVOLVES", "title": "INVOLVES", "to": "Sacroiliitis"}, {"arrows": "to", "from": "NCT01649375", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "ASAS40 treatment response"}, {"arrows": "to", "from": "NCT00809159", "label": "INVOLVES", "title": "INVOLVES", "to": "Sacroiliitis"}, {"arrows": "to", "from": "NCT00809159", "label": "EVALUATES", "title": "EVALUATES", "to": "AIN457"}, {"arrows": "to", "from": "NCT00809159", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "ASAS20 treatment response"}, {"arrows": "to", "from": "NCT00809159", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Moderate to severe CD"}, {"arrows": "to", "from": "NCT00809159", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "BASMI Score"}, {"arrows": "to", "from": "NCT00365859", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "screening to week 52/early termination"}, {"arrows": "to", "from": "NCT00365859", "label": "EVALUATES", "title": "EVALUATES", "to": "Iloperidone"}, {"arrows": "to", "from": "NCT00365859", "label": "INVOLVES", "title": "INVOLVES", "to": "Autism Spectrum Disorders"}, {"arrows": "to", "from": "NCT00365859", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Simpson Angus Rating Scale"}, {"arrows": "to", "from": "NCT00365859", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Abnormal Involuntary Movement Scale"}, {"arrows": "to", "from": "NCT04312659", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Participants in Remission"}, {"arrows": "to", "from": "NCT04312659", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Children aged 2-15 years"}, {"arrows": "to", "from": "NCT04312659", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "endoscopic treatment improvement"}, {"arrows": "to", "from": "NCT04312659", "label": "EVALUATES", "title": "EVALUATES", "to": "TA-650(Infliximab)"}, {"arrows": "to", "from": "NCT04312659", "label": "INVOLVES", "title": "INVOLVES", "to": "Immune-related Colitis"}, {"arrows": "to", "from": "NCT04312659", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change From Baseline in Height-for-age Z-score"}, {"arrows": "to", "from": "NCT04312659", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Clinical Response 100"}, {"arrows": "to", "from": "NCT04098575", "label": "INVOLVES", "title": "INVOLVES", "to": "Overweight and Obese Subjects With Type 2 Diabetes"}, {"arrows": "to", "from": "NCT04098575", "label": "EVALUATES", "title": "EVALUATES", "to": "Biphasic Remogliflozin Etabonate"}, {"arrows": "to", "from": "NCT04731675", "label": "EVALUATES", "title": "EVALUATES", "to": "AMX0035"}, {"arrows": "to", "from": "NCT04731675", "label": "INVOLVES", "title": "INVOLVES", "to": "Tenosynovial Giant Cell Tumor of the Knee"}, {"arrows": "to", "from": "NCT04731675", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Treatment-Emergent SAEs"}, {"arrows": "to", "from": "NCT04731675", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "WOMAC physical function sub-score"}, {"arrows": "to", "from": "NCT04731675", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Overall Tumor Response"}, {"arrows": "to", "from": "NCT04731675", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in Active Range of Motion"}, {"arrows": "to", "from": "NCT03881059", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "PASI100 response"}, {"arrows": "to", "from": "NCT03881059", "label": "EVALUATES", "title": "EVALUATES", "to": "BMS-986231"}, {"arrows": "to", "from": "NCT03881059", "label": "INVOLVES", "title": "INVOLVES", "to": "History psoriatic arthritis"}, {"arrows": "to", "from": "NCT03881059", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "ACR20 Responders"}, {"arrows": "to", "from": "NCT03881059", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "tender/painful joint count"}, {"arrows": "to", "from": "NCT04680975", "label": "EVALUATES", "title": "EVALUATES", "to": "Oral Belumosudil"}, {"arrows": "to", "from": "NCT04680975", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Patient Global Improvement"}, {"arrows": "to", "from": "NCT04680975", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in Physician\u0027s Global Assessment"}, {"arrows": "to", "from": "NCT04680975", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "new onset lung fibrosis"}, {"arrows": "to", "from": "NCT04680975", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Percent of the predicted forced expiratory volume over 1 second"}, {"arrows": "to", "from": "NCT04680975", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "current active renal disease"}, {"arrows": "to", "from": "NCT04680975", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "mRSS"}, {"arrows": "to", "from": "NCT04680975", "label": "INVOLVES", "title": "INVOLVES", "to": "Diffuse Systemic Sclerosis"}, {"arrows": "to", "from": "NCT04680975", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "cardiac failure"}, {"arrows": "to", "from": "NCT04680975", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Pulmonary Vascular Disease"}, {"arrows": "to", "from": "NCT04680975", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "SHAQ-DI"}, {"arrows": "to", "from": "NCT04680975", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "ACR CRISS composite score"}, {"arrows": "to", "from": "NCT01603459", "label": "EVALUATES", "title": "EVALUATES", "to": "Onabotulinumtoxin A"}, {"arrows": "to", "from": "NCT01603459", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Ashworth Score"}, {"arrows": "to", "from": "NCT01603459", "label": "INVOLVES", "title": "INVOLVES", "to": "Post-Stroke Upper Limb Spasticity"}, {"arrows": "to", "from": "NCT01603459", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Investigator\u0027s Global Assessment of Efficacy"}, {"arrows": "to", "from": "NCT01603459", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Injection Cycle"}, {"arrows": "to", "from": "NCT00614575", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Modified Barthel Index"}, {"arrows": "to", "from": "NCT00614575", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "UPDRS Part I Item 3 Score"}, {"arrows": "to", "from": "NCT00614575", "label": "INVOLVES", "title": "INVOLVES", "to": "depressed episode"}, {"arrows": "to", "from": "NCT00614575", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "UPDRS Items 32 and 33 Composite Score"}, {"arrows": "to", "from": "NCT00614575", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Bech Melancholia Subscale Score"}, {"arrows": "to", "from": "NCT00614575", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Weeks 12"}, {"arrows": "to", "from": "NCT00614575", "label": "INVOLVES", "title": "INVOLVES", "to": "early-stage Parkinson\u0027s disease"}, {"arrows": "to", "from": "NCT00614575", "label": "EVALUATES", "title": "EVALUATES", "to": "Pramipexole Extended Release"}, {"arrows": "to", "from": "NCT02400775", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Office BP measurements"}, {"arrows": "to", "from": "NCT02400775", "label": "INVOLVES", "title": "INVOLVES", "to": "High LDL-C"}, {"arrows": "to", "from": "NCT02400775", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in Fibrosis-4 (FIB-4) Score"}, {"arrows": "to", "from": "NCT02400775", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Change in lipid-regulating protein levels"}, {"arrows": "to", "from": "NCT02400775", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in calcified component"}, {"arrows": "to", "from": "NCT02400775", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in number of microchannels"}, {"arrows": "to", "from": "NCT02400775", "label": "INVOLVES", "title": "INVOLVES", "to": "Stage II essential hypertension"}, {"arrows": "to", "from": "NCT02400775", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Change in thickness of fibrous cap"}, {"arrows": "to", "from": "NCT02400775", "label": "INVOLVES", "title": "INVOLVES", "to": "No recent unstable angina"}, {"arrows": "to", "from": "NCT02400775", "label": "EVALUATES", "title": "EVALUATES", "to": "Amlodipine Besylate/Benazepril"}, {"arrows": "to", "from": "NCT02698475", "label": "EVALUATES", "title": "EVALUATES", "to": "Abrilumab"}, {"arrows": "to", "from": "NCT02698475", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "C-DLQI Score"}, {"arrows": "to", "from": "NCT02698475", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Failed standard treatment"}, {"arrows": "to", "from": "NCT02698475", "label": "INVOLVES", "title": "INVOLVES", "to": "Mild to Severe Plaque Psoriasis"}, {"arrows": "to", "from": "NCT02698475", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "PGA score clear/almost clear"}, {"arrows": "to", "from": "NCT02698475", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "PASI100 response"}, {"arrows": "to", "from": "NCT01351675", "label": "MEASURES_SECONDARY", "title": "MEASURES_SECONDARY", "to": "Time-to-first event"}, {"arrows": "to", "from": "NCT01351675", "label": "EVALUATES", "title": "EVALUATES", "to": "Bardoxolone Methyl"}, {"arrows": "to", "from": "NCT01351675", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Mean change in Systolic BP"}, {"arrows": "to", "from": "NCT01351675", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "12 years or older"}, {"arrows": "to", "from": "NCT01351675", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Diastolic blood pressure \u003c 60 mm Hg"}, {"arrows": "to", "from": "NCT01351675", "label": "MEASURES_PRIMARY", "title": "MEASURES_PRIMARY", "to": "Time to First Relapse Event"}, {"arrows": "to", "from": "NCT01351675", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Treatment with an ACE inhibitor and/or an ARB"}, {"arrows": "to", "from": "NCT01351675", "label": "INVOLVES", "title": "INVOLVES", "to": "Overweight and Obese Subjects With Type 2 Diabetes"}, {"arrows": "to", "from": "NCT01351675", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "Stable Dose Period"}, {"arrows": "to", "from": "NCT01351675", "label": "HAS_CRITERIA", "title": "HAS_CRITERIA", "to": "eGFR \u003e 60 ml/min/1.73 m2"}
+    ];
+
+    // ---- Utility: color presets per group ----
+   const colorPresets = {
+  trials: '#6366f1',        // strong blue (hub)
+  conditions: '#ec4899',    // pink
+  treatments: '#10b981',    // green
+  measures: '#d97706',     // amber (NOT yellow)
+  populations: '#8b5cf6',  // purple
+  default: '#94a3b8'       // soft slate, not baby blue
+};
+
+
+
+    function nodeColorFor(node) {
+      if (node.group && colorPresets[node.group]) return colorPresets[node.group];
+      return colorPresets.default;
+    }
+
+function inferGroupFromEdge(label) {
+  if (!label) return 'default';
+  
+  const upper = label.toUpperCase();
+  
+  // Check in priority order - most specific first
+  if (upper.includes('HAS_CRITERIA')) return 'conditions';
+  if (upper.includes('EVALUATES')) return 'treatments';
+  if (upper.includes('INVOLVES')) return 'populations';
+  if (upper.includes('MEASURES')) return 'measures';  // Check last!
+  
+  return 'default';
+}
+
+    // // ---- Prepare datasets with colors ----
+    // function seedData() {
+    //   sampleNodes.forEach(n => {
+    //     const color = (typeof n.color === 'string') ? n.color : nodeColorFor(n);
+    //     nodes.add({
+    //       id: n.id,
+    //       label: n.label,
+    //       title: `${n.group || 'node'}: ${n.label}`,
+    //       group: n.group || (
+    //       n.title?.startsWith('SubjectNode') ? 'trials' :
+    //       n.title?.startsWith('ObjectNode') ? 'conditions' :
+    //       'default'
+    //       ),
+    //       color: { background: color, border: shade(color, -10) },
+    //       font: { color: document.body.classList.contains('dark') ? '#f8fafc' : '#101827' },
+    //       shape: 'dot',
+    //       size: 18
+    //     });
+    //   });
+
+    //   sampleEdges.forEach((e, idx) => {
+    //     edges.add({
+    //       id: 'e' + idx,
+    //       from: e.from,
+    //       to: e.to,
+    //       label: e.label,
+    //       color: { color: 'rgba(80,80,80,0.18)' },
+    //       arrows: 'to',
+    //       font: { align: 'middle' }
+    //     });
+    //   });
+
+    //   // capture original colors
+    //   nodes.get().forEach(n => originalNodeColors.set(n.id, JSON.parse(JSON.stringify(n.color))));
+    //   edges.get().forEach(e => originalEdgeColors.set(e.id, e.color));
+    // }
+function seedData() {
+      // 1️⃣ PRE-PROCESS: Map every node ID to its incoming edge labels
+      // This tells us "what" a node is based on how it's connected
+      const nodeRelationships = {};
+      
+      sampleEdges.forEach(e => {
+        if (!nodeRelationships[e.to]) {
+          nodeRelationships[e.to] = [];
+        }
+        nodeRelationships[e.to].push(e.label);
+      });
+
+      // Helper to determine group based on edge labels
+      function getGroup(id, existingGroup) {
+        // Rule 1: NCT IDs are ALWAYS trials (Blue)
+        if (String(id).startsWith('NCT')) return 'trials';
+        
+        // Rule 2: If the data already has a specific group, keep it
+        if (existingGroup && existingGroup !== 'default') return existingGroup;
+
+        // Rule 3: Infer group from incoming edges
+        const labels = nodeRelationships[id] || [];
+        
+        // Priority order matters here!
+        if (labels.some(l => l.toUpperCase().includes('MEASURES'))) return 'measures'; // Orange
+        if (labels.some(l => l.toUpperCase().includes('EVALUATES'))) return 'treatments'; // Green
+        if (labels.some(l => l.toUpperCase().includes('HAS_CRITERIA'))) return 'conditions'; // Pink
+        if (labels.some(l => l.toUpperCase().includes('INVOLVES'))) return 'populations'; // Purple
+        
+        return 'default'; // Light Blue
+      }
+
+      // 2️⃣ ADD NODES (Apply the logic above)
+      // We use a Set to track added IDs so we don't add duplicates later
+      const addedIds = new Set();
+
+      sampleNodes.flat().forEach(n => {
+        const id = String(n.id ?? n.label);
+        if (addedIds.has(id)) return; // skip duplicates
+
+        const group = getGroup(id, n.group);
+        const color = colorPresets[group] || colorPresets.default;
+
+        nodes.add({
+          id: id,
+          label: n.label || id,
+          title: n.title || n.label || id,
+          group: group,
+          shape: 'dot',
+          size: group === 'trials' ? 24 : 14, // Make trials slightly bigger
+          color: { 
+            background: color, 
+            border: shade(color, -15),
+            highlight: { background: color, border: '#000' }
+          },
+          font: { 
+            color: document.body.classList.contains('dark') ? '#f8fafc' : '#1e293b' 
+          }
+        });
+        addedIds.add(id);
+      });
+
+      // 3️⃣ CREATE MISSING NODES FROM EDGES
+      // (For nodes mentioned in edges but missing from sampleNodes)
+      sampleEdges.forEach(e => {
+        [e.from, e.to].forEach(id => {
+          if (!addedIds.has(id)) {
+            const group = getGroup(id);
+            const color = colorPresets[group] || colorPresets.default;
+
+            nodes.add({
+              id: id,
+              label: id,
+              group: group,
+              shape: 'dot',
+              size: group === 'trials' ? 24 : 16,
+              color: { 
+                background: color, 
+                border: shade(color, -15) 
+              }
+            });
+            addedIds.add(id);
+          }
+        });
+      });
+
+      // 4️⃣ ADD EDGES
+      sampleEdges.forEach((e, i) => {
+        edges.add({
+          id: 'e' + i,
+          from: e.from,
+          to: e.to,
+          label: e.label,
+          arrows: 'to',
+          color: { color: 'rgba(120,120,120,0.2)' },
+          font: { align: 'middle', size: 10 }
+        });
+      });
+
+      // 5️⃣ SAVE ORIGINAL COLORS (for search reset)
+      nodes.get().forEach(n =>
+        originalNodeColors.set(n.id, JSON.parse(JSON.stringify(n.color)))
+      );
+      edges.get().forEach(e =>
+        originalEdgeColors.set(e.id, e.color)
+      );
+    }
+
+    // tiny shade helper (lighten/darken hex)
+    function shade(hex, percent) {
+      try {
+        const c = hex.replace('#','');
+        const num = parseInt(c,16);
+        const r = Math.max(Math.min(((num >> 16) + percent),255),0);
+        const g = Math.max(Math.min(((num >> 8 & 0x00FF) + percent),255),0);
+        const b = Math.max(Math.min(((num & 0x0000FF) + percent),255),0);
+        return '#' + ( (1<<24) + (r<<16) + (g<<8) + b ).toString(16).slice(1);
+      } catch(e){ return hex; }
+    }
+
+    // ---- Network initialization ----
+    function initNetwork() {
+      const container = document.getElementById('network-container');
+      const data = { nodes, edges };
+      const options = {
+        nodes: { shape: 'dot', size: 18, borderWidth: 2, font: { face: 'Inter' } },
+        edges: { width: 2, smooth: { type: 'continuous' }, arrows: { to: { enabled: true, scaleFactor: 0.6 } } },
+        physics: {
+          enabled: true,
+          barnesHut: {
+            gravitationalConstant: -2000,
+            centralGravity: 0.25,
+            springLength: 180,
+            springConstant: 0.04,
+            damping: 0.09
+          },
+          stabilization: { enabled: true, iterations: 700, updateInterval: 50 }
+        },
+        interaction: { hover: true, tooltipDelay: 100, navigationButtons: false, keyboard: true },
+        layout: { improvedLayout: true }
+      };
+
+      try {
+        network = new vis.Network(container, data, options);
+
+        network.on('stabilizationProgress', params => {
+          const p = Math.round((params.iterations / params.total) * 100);
+          progressBar.style.width = p + '%';
+          progressText.textContent = p + '%';
+        });
+
+        network.on('stabilizationIterationsDone', () => {
+          progressBar.style.width = '100%';
+          progressText.textContent = '100%';
+          setTimeout(() => { loadingOverlay.style.display = 'none'; network.fit({ animation: { duration: 400 } }); }, 350);
+        });
+
+        network.on('click', params => {
+          if (params.nodes && params.nodes.length) {
+            showNodeDetails(params.nodes[0]);
+          } else {
+            nodeDetails.style.display = 'none';
+          }
+        });
+
+        network.on('doubleClick', params => {
+          // If double-click node, center on it
+          if (params.nodes && params.nodes.length) {
+            network.focus(params.nodes[0], { scale: 1.4, animation: true });
+          }
+        });
+
+      } catch (err) {
+        console.error('vis init error', err);
+        loadingOverlay.style.display = 'none';
+      }
+    }
+
+    // ---- UI helpers ----
+    function showNodeDetails(nodeId) {
+      const n = nodes.get(nodeId);
+      if (!n) return;
+      nodeTitleEl.textContent = n.label || nodeId;
+      nodeTypeEl.textContent = n.group || 'node';
+      nodeIdEl.textContent = nodeId;
+      const connected = network.getConnectedNodes(nodeId);
+      nodeConnectionsEl.textContent = (connected && connected.length) ? `${connected.length} connections` : 'None';
+      nodeDetails.style.display = 'block';
+    }
+
+    // ---- Search & highlight ----
+    let highlightTimer = null;
+    function resetHighlighting() {
+  // restore node colors ONLY (no camera movement)
+  nodes.get().forEach(n => {
+    const orig = originalNodeColors.get(n.id);
+    if (orig) nodes.update({ id: n.id, color: orig });
+  });
+
+  // restore edge colors ONLY
+  edges.get().forEach(e => {
+    const orig = originalEdgeColors.get(e.id);
+    if (orig) edges.update({ id: e.id, color: orig });
+  });
+
+  // ❌ DO NOT call network.fit() here
+}
+
+    function highlightMatched(nodeIds) {
+  resetHighlighting();
+  if (!nodeIds || !nodeIds.length) return;
+
+  const highlightColor = '#ff6b6b';
+
+  // highlight matched nodes
+  nodeIds.forEach(id => {
+    nodes.update({
+      id,
+      color: { background: highlightColor, border: shade(highlightColor, -10) }
+    });
+  });
+
+  // dim others
+  nodes.get().forEach(n => {
+    if (!nodeIds.includes(n.id)) {
+      nodes.update({
+        id: n.id,
+        color: {
+          background: 'rgba(180,180,180,0.12)',
+          border: 'rgba(180,180,180,0.08)'
+        }
+      });
+    }
+  });
+
+  // edge coloring
+  edges.get().forEach(e => {
+    edges.update({
+      id: e.id,
+      color: {
+        color:
+          nodeIds.includes(e.from) || nodeIds.includes(e.to)
+            ? '#5352ed'
+            : 'rgba(140,140,140,0.08)'
+      }
+    });
+  });
+
+  // ✅ CAMERA RULE:
+  // single node → focus
+  if (nodeIds.length === 1) {
+    network.focus(nodeIds[0], {
+      scale: 1.4,
+      animation: { duration: 400 }
+    });
+  } else {
+    // multiple nodes → fit once
+    network.fit({
+      nodes: nodeIds,
+      animation: { duration: 400 }
+    });
+  }
+}
+
+
+    searchInput.addEventListener('input', (e) => {
+      const value = (e.target.value || '').trim().toLowerCase();
+      clearSearchBtn.style.display = value ? 'block' : 'none';
+      if (!value) {
+        resetHighlighting();
+        return;
+      }
+      // find matches
+      const matched = nodes.get().filter(n =>
+        (n.label && n.label.toLowerCase().includes(value)) ||
+        (n.title && n.title.toLowerCase().includes(value)) ||
+        (n.group && n.group.toLowerCase().includes(value))
+      ).map(n => n.id);
+      highlightMatched(matched);
+      if (highlightTimer) clearTimeout(highlightTimer);
+      highlightTimer = setTimeout(() => {
+        // temporary highlight window — keep as-is (user can clear)
+      }, 1000);
+    });
+
+    clearSearchBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      clearSearchBtn.style.display = 'none';
+      resetHighlighting();
+    });
+
+    // Escape key clears search
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { clearSearchBtn.click(); } });
+
+    // ---- Controls ----
+    themeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark');
+      if (network) {
+        const dark = document.body.classList.contains('dark');
+        nodes.update(nodes.get().map(n => ({ id: n.id, font: { color: dark ? '#f8fafc' : '#101827' } })));
+      }
+    });
+
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+      sidebarToggle.textContent = sidebar.classList.contains('collapsed') ? '»' : '«';
+    });
+
+    zoomInBtn.addEventListener('click', () => { if (network) network.moveTo({ scale: network.getScale() * 1.2 }); });
+    zoomOutBtn.addEventListener('click', () => { if (network) network.moveTo({ scale: network.getScale() * 0.85 }); });
+    fitGraphBtn.addEventListener('click', () => { if (network) network.fit({ animation: { duration: 400 } }); });
+
+    resetPhysicsBtn.addEventListener('click', () => {
+      if (!network) return;
+      network.setOptions({ physics: { barnesHut: { gravitationalConstant: -2000, springLength: 180, centralGravity: 0.25, damping: 0.09 } } });
+      // restart stabilization
+      try { network.stabilize(); } catch(e){}
+    });
+
+    // gravity & spacing sliders
+    gravitySlider.addEventListener('input', function() {
+      const v = Number(this.value);
+      gravityValueEl.textContent = v + '%';
+      if (!network) return;
+      const g = -5000 * (v / 100); // map 0..100 -> 0..-5000
+      network.setOptions({ physics: { barnesHut: { gravitationalConstant: g } } });
+    });
+    spacingSlider.addEventListener('input', function() {
+      const v = Number(this.value);
+      spacingValueEl.textContent = v + '%';
+      if (!network) return;
+      const s = 50 + (v / 100) * 300; // map 0..100 -> 50..350
+      network.setOptions({ physics: { barnesHut: { springLength: s } } });
+    });
+
+    // overriding your entire color system.
+    // color items apply a color theme to groups (or all nodes)
+    // document.querySelectorAll('.color-item').forEach(el => {
+    //   el.addEventListener('click', () => {
+    //     const col = el.dataset.color || window.getComputedStyle(el).backgroundColor;
+    //     // update default trial color and re-apply to nodes of groups for visual polish
+    //     nodes.get().forEach(n => {
+    //       const base = nodeColorFor(n);
+    //       const newColor = col;
+    //       nodes.update({ id: n.id, color: { background: newColor, border: shade(newColor, -10), highlight: { background: newColor, border: shade(newColor, -12) } } });
+    //     });
+    //     // edges lighter
+    //     edges.get().forEach(ed => edges.update({ id: ed.id, color: { color: col.replace('#','') ? col : 'rgba(120,120,120,0.2)' } }));
+    //   });
+    // });
+
+    // ---- Data import modal stub ----
+    document.getElementById('data-source-btn').addEventListener('click', () => {
+    const modal = document.createElement('div');
+    Object.assign(modal.style, {position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:120});
+    modal.innerHTML = `
+      <div style="width:760px;max-width:95%;background:var(--card);border-radius:12px;padding:14px;border:1px solid var(--border);box-shadow:var(--shadow)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h3 style="margin:0">Import data (paste vis DataSet or JSON)</h3>
+          <div style="font-size:13px;color:var(--muted)">Supports: javascript vis blocks, arrays, or JSON file</div>
+        </div>
+        <div style="display:flex;gap:12px">
+          <textarea id="import-text" placeholder="Paste: const nodes = new vis.DataSet([...]); const edges = new vis.DataSet([...]); OR paste arrays, OR paste {\"nodes\":[...],\"edges\":[...]} " 
+            style="width:62%;height:340px;padding:10px;border-radius:8px;border:1px solid var(--border);font-family:monospace;font-size:13px;resize:vertical"></textarea>
+          <div style="width:36%;display:flex;flex-direction:column;gap:8px">
+            <div style="padding:8px;border-radius:8px;border:1px dashed var(--border);flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Or upload a JSON file</div>
+              <input id="import-file" type="file" accept=".json,application/json" style="width:100%"/>
+              <div style="font-size:12px;color:var(--muted);margin-top:12px">Tip: You can paste entire vis DataSet blocks (no need to reformat)</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button id="import-apply" class="btn btn-primary" style="flex:1">Apply</button>
+              <button id="import-sample" class="btn" style="flex:1">Load sample</button>
+              <button id="import-close" class="btn" style="flex:1">Close</button>
+            </div>
+            <div id="import-msg" style="font-size:13px;color:var(--muted);padding-top:6px"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const ta = modal.querySelector('#import-text');
+    const fileInput = modal.querySelector('#import-file');
+    const applyBtn = modal.querySelector('#import-apply');
+    const closeBtn = modal.querySelector('#import-close');
+    const sampleBtn = modal.querySelector('#import-sample');
+    const msg = modal.querySelector('#import-msg');
+
+    closeBtn.addEventListener('click', () => modal.remove());
+    sampleBtn.addEventListener('click', () => {
+      ta.value = `const nodes = new vis.DataSet([
+  {"id":"NCT03821493","label":"NCT03821493","group":"trials"},
+  {"id":"Advanced Solid Malignancies","label":"Advanced Solid Malignancies","group":"conditions"}
+]);
+const edges = new vis.DataSet([
+  {"from":"NCT03821493","to":"Advanced Solid Malignancies","label":"HAS_CRITERIA"}
+]);`;
+    });
+
+    fileInput.addEventListener('change', async (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      try {
+        const txt = await f.text();
+        ta.value = txt;
+        msg.textContent = `Loaded ${f.name} — ready to apply.`;
+      } catch (e) {
+        msg.textContent = 'Failed to read file.';
+      }
+    });
+
+    applyBtn.addEventListener('click', () => {
+      const text = ta.value.trim();
+      if (!text) { msg.textContent = 'Paste your data or load a JSON file.'; return; }
+      const result = parseAndExtract(text);
+      if (!result) { msg.textContent = 'Could not parse nodes/edges. Paste full vis blocks or a JSON object with nodes/edges.'; return; }
+      // apply to live graph
+      applyParsed(result.nodes, result.edges);
+      msg.textContent = `Loaded ${result.nodes.length} nodes, ${result.edges.length} edges.`;
+      // small delay then close modal
+      setTimeout(()=>modal.remove(), 600);
+    });
+  });
+
+  // ---- parsing helpers ----
+
+  // extract first balanced array starting from an index (robust to strings/escapes)
+  function extractFirstArray(text, startIdx = 0) {
+    const start = text.indexOf('[', startIdx);
+    if (start === -1) return null;
+    let depth = 0, inStr = false, strChar = null, esc = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (esc) { esc = false; continue; }
+      if (ch === '\\') { esc = true; continue; }
+      if (inStr) {
+        if (ch === strChar) inStr = false;
+        continue;
+      } else {
+        if (ch === '"' || ch === "'") { inStr = true; strChar = ch; continue; }
+        if (ch === '[') depth++;
+        else if (ch === ']') {
+          depth--;
+          if (depth === 0) {
+            return text.slice(start, i + 1);
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  // try JSON.parse safely, otherwise return null
+  function tryJSON(text) {
+    try { return JSON.parse(text); } catch(e){ return null; }
+  }
+
+  // main: try to parse common cases:
+  // 1) JSON object with nodes/edges arrays
+  // 2) pasted JS vis blocks: const nodes = new vis.DataSet([...]); const edges = new vis.DataSet([...])
+  // 3) pasted plain arrays for nodes and edges (two arrays)
+  function parseAndExtract(text) {
+    // 1. direct JSON object
+    const j = tryJSON(text);
+    if (j && (Array.isArray(j.nodes) || Array.isArray(j.edges))) {
+      return { nodes: j.nodes || [], edges: j.edges || [] };
+    }
+
+    // 2. try to find nodes array near "nodes" word
+    const lower = text.toLowerCase();
+    let nodesArr = null, edgesArr = null;
+
+    // helper to search keyword then extract first array after it
+    function searchAfterKeyword(keyword) {
+      const idx = lower.indexOf(keyword);
+      if (idx === -1) return null;
+      return extractFirstArray(text, idx);
+    }
+
+    // common variants
+    const nodeCandidates = [
+      'const nodes', 'let nodes', 'var nodes', 'nodes = new vis.dataset', 'nodes = new vis.DataSet'.toLowerCase(),
+      'sampleNodes'.toLowerCase(), '"nodes"'
+    ];
+    for (const k of nodeCandidates) {
+      const arr = searchAfterKeyword(k);
+      if (arr) { nodesArr = arr; break; }
+    }
+    // fallback: first array in text
+    if (!nodesArr) nodesArr = extractFirstArray(text, 0);
+
+    // find edges: search after 'edges' keyword; if not, look for next array after nodes
+    const edgeCandidates = [
+      'const edges', 'let edges', 'var edges', 'edges = new vis.dataset', 'edges = new vis.DataSet'.toLowerCase(),
+      'sampleEdges'.toLowerCase(), '"edges"'
+    ];
+    for (const k of edgeCandidates) {
+      const arr = searchAfterKeyword(k);
+      if (arr) { edgesArr = arr; break; }
+    }
+    if (!edgesArr) {
+      // try to find second array occurrence (after nodes array end)
+      if (nodesArr) {
+        const pos = text.indexOf(nodesArr) + nodesArr.length;
+        edgesArr = extractFirstArray(text, pos);
+      } else {
+        // try second array in document (naive)
+        const first = extractFirstArray(text, 0);
+        if (first) {
+          const pos = text.indexOf(first) + first.length;
+          edgesArr = extractFirstArray(text, pos);
+        }
+      }
+    }
+
+    // convert array-strings into actual arrays with JSON.parse after some sanitization
+    function cleanAndParseArray(arrText) {
+      if (!arrText) return null;
+      // replace single quotes with double quotes only when safe: naive but works for most vis exports
+      // Better approach is to try JSON.parse first. If fails, try replacing single quotes (quick heuristic).
+      try {
+        return JSON.parse(arrText);
+      } catch (e) {
+        // attempt safe single-quote -> double-quote replace for object keys/strings
+        const replaced = arrText.replace(/'/g, '"');
+        try { return JSON.parse(replaced); } catch (e2) { return null; }
+      }
+    }
+
+    const parsedNodes = cleanAndParseArray(nodesArr);
+    const parsedEdges = cleanAndParseArray(edgesArr);
+
+    // If nodes parsed and edges not found, maybe the pasted text was an object with nodes/edges deeper - try JSON parse on text again
+    if ((!parsedNodes || parsedNodes.length === 0) && (!parsedEdges || parsedEdges.length === 0)) {
+      const j2 = tryJSON(text.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":')); // try to coerce keys to valid json
+      if (j2 && (Array.isArray(j2.nodes) || Array.isArray(j2.edges))) {
+        return { nodes: j2.nodes || [], edges: j2.edges || [] };
+      }
+    }
+
+    return {
+      nodes: parsedNodes || [],
+      edges: parsedEdges || []
+    };
+  }
+
+  // apply parsed arrays to current vis DataSets (nodes, edges)
+function applyParsed(parsedNodes, parsedEdges) {
+  if (!Array.isArray(parsedNodes) || !Array.isArray(parsedEdges)) return;
+
+  nodes.clear();
+  edges.clear();
+  originalNodeColors.clear();
+  originalEdgeColors.clear();
+
+  // ---- 1️⃣ Index edges by node (for non-NCT inference only)
+  const edgeMap = {};
+  parsedEdges.forEach(e => {
+    if (!e.from || !e.to) return;
+    edgeMap[e.from] = edgeMap[e.from] || [];
+    edgeMap[e.to] = edgeMap[e.to] || [];
+    edgeMap[e.from].push(e.label || '');
+    edgeMap[e.to].push(e.label || '');
+  });
+
+  // ---- 2️⃣ Add nodes (STRICT coloring rules)
+ // ✅ FIXED CODE - Replace lines ~890-925 in applyParsed()
+parsedNodes.forEach(n => {
+  const id = String(n.id ?? n.label);
+  const label = n.label ?? id;
+
+  let group;
+
+  // 🔒 ABSOLUTE RULE: NCT = trials, no exceptions
+  if (id.startsWith('NCT')) {
+    group = 'trials';
+  } 
+  // If node already has explicit group, respect it (but NOT for NCTs)
+  else if (n.group && n.group !== 'default') {
+    group = n.group;
+  } 
+  // ONLY infer for non-NCT nodes without explicit groups
+  else {
+    const labels = edgeMap[id] || [];
+    if (labels.some(l => l.includes('HAS_CRITERIA'))) group = 'conditions';
+    else if (labels.some(l => l.includes('EVALUATES'))) group = 'treatments';
+    else if (labels.some(l => l.includes('MEASURES'))) group = 'measures';
+    else if (labels.some(l => l.includes('INVOLVES'))) group = 'populations';
+    else group = 'default';
+  }
+
+  const color = colorPresets[group] || colorPresets.default;
+
+  nodes.add({
+    id,
+    label,
+    title: `${group}: ${label}`,
+    group,  // ✅ This now GUARANTEES trials stay blue
+    shape: 'dot',
+    size: group === 'trials' ? 22 : 18,
+    color: { background: color, border: shade(color, -12) },
+    font: { color: document.body.classList.contains('dark') ? '#f8fafc' : '#101827' }
+  });
+});
+
+  // ---- 3️⃣ Add edges (neutral color)
+  parsedEdges.forEach((e, i) => {
+    if (!e.from || !e.to) return;
+    edges.add({
+      id: e.id || `e${i}`,
+      from: e.from,
+      to: e.to,
+      label: e.label || '',
+      arrows: 'to',
+      color: { color: 'rgba(120,120,120,0.25)' },
+      font: { align: 'middle', color: '#64748b', size: 11 }
+    });
+  });
+
+  // ---- 4️⃣ Save original colors
+  nodes.get().forEach(n =>
+    originalNodeColors.set(n.id, JSON.parse(JSON.stringify(n.color)))
+  );
+  edges.get().forEach(e =>
+    originalEdgeColors.set(e.id, e.color)
+  );
+
+  if (network) {
+    setTimeout(() => network.fit({ animation: { duration: 400 } }), 150);
+  }
+}
+
+    // ---- Save/export stub ----
+    document.getElementById('save-graph-btn').addEventListener('click', () => {
+      const payload = { nodes: nodes.get(), edges: edges.get() };
+      const blob = new Blob([JSON.stringify(payload,null,2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'graph-export.json'; document.body.appendChild(a); a.click();
+      a.remove(); URL.revokeObjectURL(url);
+    });
+
+    // ---- Initialization sequence ----
+    function simulateLoadingAndInit() {
+      loadingOverlay.style.display = 'flex';
+      progressBar.style.width = '8%'; progressText.textContent = 'Initializing...';
+      seedData();
+      // slight delay for perception
+      setTimeout(() => { initNetwork(); }, 120);
+    }
+
+    // run
+    document.addEventListener('DOMContentLoaded', () => {
+      simulateLoadingAndInit();
+    });
+  </script>
+</body>
+</html>
